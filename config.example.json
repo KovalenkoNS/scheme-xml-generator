@@ -1,0 +1,27 @@
+{
+  "listenAddress": "127.0.0.1",
+  "port": 3210,
+  "autoOpenBrowser": true,
+  "common": {
+    "version": "29",
+    "project": "",
+    "controllerTypeName": "",
+    "controllerId": "0",
+    "resourceId": "0"
+  },
+  "page": {
+    "dparams": "3",
+    "width": 2000,
+    "height": 2000,
+    "backgroundColor": "16777215",
+    "groupId": "0",
+    "pouNumber": "0",
+    "marginRight": 200,
+    "marginBottom": 200
+  },
+  "ids": {
+    "nextT11": 3000000,
+    "nextCard": 900000,
+    "nextPou": 100000
+  }
+}

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f4f6f1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <title>Генератор XML-схем</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">К основному содержимому</a>
+
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Генератор XML-схем">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" role="img">
+            <path d="M6 5.5h13l7 7V26.5H6z" />
+            <path d="M19 5.5v7h7M10 18h4m4 0h4M12 15v6m8-6v6" />
+          </svg>
+        </span>
+        <span>
+          <strong>Генератор XML-схем</strong>
+          <small>Библиотечные шаблоны · локальная сборка</small>
+        </span>
+      </div>
+
+      <div class="topbar-actions">
+        <span id="connection-status" class="connection-status" data-state="checking" role="status">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span class="status-text">Подключение…</span>
+        </span>
+        <button id="reload-all" class="button button-secondary button-compact" type="button">
+          <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8 8 0 1 0-2.34 5.66M20 5v6h-6" />
+          </svg>
+          Обновить библиотеки
+        </button>
+      </div>
+    </header>
+
+    <main id="main-content" class="main-layout">
+      <aside class="template-panel" aria-labelledby="templates-title">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Шаг 1</p>
+            <h1 id="templates-title">Выберите шаблон</h1>
+          </div>
+          <span id="template-total" class="count-pill" aria-label="Количество шаблонов">—</span>
+        </div>
+
+        <label class="search-field" for="template-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4 4" />
+          </svg>
+          <span class="visually-hidden">Поиск шаблона</span>
+          <input id="template-search" type="search" placeholder="Поиск по имени или библиотеке" autocomplete="off">
+          <button id="clear-search" class="icon-button search-clear" type="button" aria-label="Очистить поиск" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17" /></svg>
+          </button>
+        </label>
+
+        <div id="library-summary" class="library-summary" aria-live="polite"></div>
+
+        <div id="template-list" class="template-list" role="listbox" aria-label="Шаблоны схем" aria-busy="true">
+          <div class="template-skeleton" aria-hidden="true"></div>
+          <div class="template-skeleton" aria-hidden="true"></div>
+          <div class="template-skeleton" aria-hidden="true"></div>
+        </div>
+
+        <div id="template-empty" class="empty-state compact" hidden>
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <path d="M9 10h20l10 10v18H9zM29 10v10h10" />
+            <path d="M17 27h14M17 32h9" />
+          </svg>
+          <strong>Шаблоны не найдены</strong>
+          <p>Проверьте поиск или добавьте XML-библиотеку в папку <code>libraries</code>.</p>
+        </div>
+      </aside>
+
+      <section class="workspace" aria-label="Настройка и генерация схемы">
+        <article class="preview-card" aria-labelledby="preview-title">
+          <div class="card-heading preview-heading">
+            <div>
+              <p class="eyebrow">Предпросмотр</p>
+              <h2 id="preview-title">Схема шаблона</h2>
+            </div>
+            <div id="template-dimensions" class="dimension-label" hidden></div>
+          </div>
+
+          <div id="preview-stage" class="preview-stage">
+            <svg id="scheme-preview" viewBox="0 0 960 420" preserveAspectRatio="xMidYMid meet" aria-labelledby="preview-svg-title preview-svg-desc" hidden>
+              <title id="preview-svg-title">Графическое представление шаблона</title>
+              <desc id="preview-svg-desc">Блоки и линии выбранного библиотечного шаблона</desc>
+              <defs>
+                <pattern id="small-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                  <path d="M 20 0 L 0 0 0 20" class="grid-line-small" />
+                </pattern>
+                <pattern id="large-grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                  <rect width="100" height="100" fill="url(#small-grid)" />
+                  <path d="M 100 0 L 0 0 0 100" class="grid-line-large" />
+                </pattern>
+              </defs>
+              <rect id="preview-grid" x="0" y="0" width="100%" height="100%" fill="url(#large-grid)" />
+              <g id="preview-content"></g>
+            </svg>
+
+            <div id="preview-placeholder" class="preview-placeholder">
+              <span class="preview-placeholder-icon" aria-hidden="true">
+                <svg viewBox="0 0 64 64">
+                  <rect x="8" y="14" width="18" height="16" rx="2" />
+                  <rect x="38" y="34" width="18" height="16" rx="2" />
+                  <path d="M26 22h8v20h4M12 38h16" />
+                  <circle cx="31" cy="42" r="2" />
+                </svg>
+              </span>
+              <strong>Выберите шаблон слева</strong>
+              <p>Здесь появится компоновка блоков и связей.</p>
+            </div>
+          </div>
+
+          <div id="selected-template-meta" class="selected-template-meta" hidden>
+            <div class="template-identity">
+              <strong id="selected-template-name"></strong>
+              <span id="selected-template-source"></span>
+            </div>
+            <p id="selected-template-description"></p>
+            <div id="selected-template-stats" class="stat-row"></div>
+            <div id="selected-template-warnings" class="inline-warning" hidden></div>
+          </div>
+        </article>
+
+        <article class="generator-card" aria-labelledby="generator-title">
+          <div class="card-heading">
+            <div>
+              <p class="eyebrow">Шаг 2</p>
+              <h2 id="generator-title">Параметры объекта</h2>
+            </div>
+          </div>
+
+          <form id="generator-form" novalidate>
+            <fieldset id="generator-fields" disabled>
+              <div class="form-grid form-grid-primary">
+                <label class="field field-wide" for="object-name">
+                  <span class="field-label">Имя объекта <em>*</em></span>
+                  <input id="object-name" name="objectName" type="text" maxlength="160" placeholder="_1110_LZIA_10101_ADR" spellcheck="false" autocomplete="off" required>
+                  <span class="field-hint">Введите базовое имя или имя одного из объектов шаблона. Корень PLC-идентификатора записывается в каноническом верхнем регистре SCADA.</span>
+                  <span id="object-name-error" class="field-error" role="alert" hidden></span>
+                </label>
+
+                <label class="field" for="name-mode">
+                  <span class="field-label">Как трактовать имя</span>
+                  <select id="name-mode" name="nameMode">
+                    <option value="auto">Определить автоматически</option>
+                    <option value="base">Это базовое имя</option>
+                  </select>
+                  <span class="field-hint">Авто определяет известный суффикс.</span>
+                </label>
+              </div>
+
+              <section id="name-preview" class="name-preview" aria-live="polite">
+                <div class="name-preview-heading">
+                  <span>Итоговые объекты</span>
+                  <span id="name-preview-status" class="micro-status">Введите имя</span>
+                </div>
+                <div id="derived-names" class="derived-names"></div>
+              </section>
+
+              <div class="form-grid">
+                <label class="field field-wide" for="pou-name">
+                  <span class="field-label">Имя программного модуля POU <em>*</em></span>
+                  <input id="pou-name" name="pouName" type="text" maxlength="160" placeholder="ADR_test" spellcheck="false" autocomplete="off" required>
+                  <span class="field-hint">Записывается в <code>OnePOU/@NAME</code>. Имя объекта выше используется отдельно — в <code>Block/@Info</code> и карточках.</span>
+                  <span id="pou-name-error" class="field-error" role="alert" hidden></span>
+                </label>
+
+                <label class="field field-wide" for="object-description">
+                  <span class="field-label">Описание</span>
+                  <textarea id="object-description" name="description" rows="2" maxlength="500" placeholder="Например: Уровень жидкости в V-101"></textarea>
+                  <span class="field-hint">Используется в описаниях создаваемых карточек.</span>
+                </label>
+
+                <label class="field field-wide" for="kl-path">
+                  <span class="field-label">KLPath</span>
+                  <input id="kl-path" name="klPath" type="text" maxlength="500" placeholder="Можно оставить пустым" spellcheck="false" autocomplete="off">
+                  <span class="field-hint">В XML записывается как корректная UTF-8 строка без управляющих байтов.</span>
+                </label>
+              </div>
+
+              <div class="form-grid form-grid-triple">
+                <label class="field" for="offset-x">
+                  <span class="field-label">Смещение X</span>
+                  <span class="input-suffix">
+                    <input id="offset-x" name="offsetX" type="number" value="300" min="-10000" max="100000" step="10" inputmode="numeric">
+                    <span>px</span>
+                  </span>
+                </label>
+
+                <label class="field" for="offset-y">
+                  <span class="field-label">Смещение Y</span>
+                  <span class="input-suffix">
+                    <input id="offset-y" name="offsetY" type="number" value="100" min="-10000" max="100000" step="10" inputmode="numeric">
+                    <span>px</span>
+                  </span>
+                </label>
+
+                <label class="field" for="file-name">
+                  <span class="field-label">Имя файла</span>
+                  <span class="input-suffix input-suffix-file">
+                    <input id="file-name" name="fileName" type="text" maxlength="180" placeholder="Сформируется автоматически" spellcheck="false" autocomplete="off">
+                    <span>.xml</span>
+                  </span>
+                </label>
+              </div>
+
+              <details class="advanced-settings">
+                <summary>
+                  <span>
+                    <strong>Расширенные идентификаторы</strong>
+                    <small>По умолчанию приложение назначит безопасные значения автоматически.</small>
+                  </span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4" /></svg>
+                </summary>
+                <div class="advanced-content form-grid form-grid-triple">
+                  <label class="field" for="t11-start">
+                    <span class="field-label">Начальный T11ID</span>
+                    <input id="t11-start" name="t11Start" type="number" min="1" max="2147483000" step="1" placeholder="Авто" inputmode="numeric">
+                  </label>
+                  <label class="field" for="card-start">
+                    <span class="field-label">Начальный cardId</span>
+                    <input id="card-start" name="cardStart" type="number" min="1" max="2147483000" step="1" placeholder="Авто" inputmode="numeric">
+                  </label>
+                  <label class="field" for="pou-id">
+                    <span class="field-label">POU ID</span>
+                    <input id="pou-id" name="pouId" type="number" min="1" max="2147483647" step="1" placeholder="Авто" inputmode="numeric">
+                  </label>
+                  <label class="field" for="pou-group-id">
+                    <span class="field-label">Целевой POU GroupID</span>
+                    <input id="pou-group-id" name="pouGroupId" type="number" min="1" max="2147483647" step="1" placeholder="Из config.json" inputmode="numeric">
+                  </label>
+                  <label class="field" for="pou-number">
+                    <span class="field-label">Целевой POUNum</span>
+                    <input id="pou-number" name="pouNumber" type="number" min="1" max="2147483647" step="1" placeholder="Из config.json" inputmode="numeric">
+                  </label>
+                </div>
+              </details>
+
+              <div class="form-actions">
+                <p id="form-status" class="form-status" role="status">Выберите параметры и проверьте итоговые имена.</p>
+                <button id="generate-button" class="button button-primary" type="submit">
+                  <span class="button-spinner" aria-hidden="true"></span>
+                  <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4" />
+                  </svg>
+                  <span class="button-label">Сформировать XML</span>
+                </button>
+              </div>
+            </fieldset>
+          </form>
+        </article>
+
+        <article class="outputs-card" aria-labelledby="outputs-title">
+          <div class="card-heading output-heading">
+            <div>
+              <p class="eyebrow">Результаты</p>
+              <h2 id="outputs-title">Готовые XML-файлы</h2>
+            </div>
+            <button id="reload-outputs" class="icon-button" type="button" aria-label="Обновить список файлов" title="Обновить список файлов">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 5v6h-6" /></svg>
+            </button>
+          </div>
+
+          <div id="output-list" class="output-list" aria-live="polite" aria-busy="true">
+            <div class="output-loading">Загружаю список файлов…</div>
+          </div>
+
+          <div id="output-empty" class="empty-state output-empty" hidden>
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 10h20l10 10v18H9zM29 10v10h10M17 29h14M17 34h10" /></svg>
+            <strong>Пока нет созданных файлов</strong>
+            <p>Первый результат появится здесь после генерации.</p>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <template id="template-card-template">
+    <button class="template-card" type="button" role="option" aria-selected="false">
+      <span class="template-card-topline">
+        <span class="template-card-name"></span>
+        <span class="template-card-id"></span>
+      </span>
+      <span class="template-card-description"></span>
+      <span class="template-card-bottomline">
+        <span class="template-card-library"></span>
+        <span class="template-card-count"></span>
+      </span>
+    </button>
+  </template>
+
+  <template id="output-item-template">
+    <article class="output-item">
+      <span class="output-file-icon" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><path d="M7 4h12l6 6v18H7zM19 4v6h6" /><path d="m11 16 3 3-3 3m6 0h4" /></svg>
+      </span>
+      <span class="output-info">
+        <strong class="output-name"></strong>
+        <span class="output-meta"></span>
+      </span>
+      <a class="button button-secondary button-download" download>
+        <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 16v4h14v-4" /></svg>
+        Скачать
+      </a>
+    </article>
+  </template>
+
+  <noscript>
+    <div class="noscript-message">Для работы интерфейса необходимо включить JavaScript.</div>
+  </noscript>
+  <script src="app.js" defer></script>
+</body>
+</html>

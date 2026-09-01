@@ -1,0 +1,32 @@
+# Build artifacts
+*.exe
+*.test
+*.out
+*.coverprofile
+/XmlSchemeGenerator
+/schemegen
+
+# Local configuration and environment
+/config.json
+.env
+.env.*
+!.env.example
+
+# Runtime state and generated files
+/data/*
+!/data/.gitkeep
+/logs/*
+!/logs/.gitkeep
+/output/*
+!/output/.gitkeep
+
+# User libraries; retain only the reviewed example fixture
+/libraries/*.xml
+!/libraries/Library AD3_v2.xml
+
+# Local editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
