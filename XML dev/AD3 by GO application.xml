@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BufScadaPOUS>
+  <Common VER="29" Project="" isCut="false" isFFB="false" ControllerTypeName="" ControllerID="0" ResuorceID="0"></Common>
+  <POUS>
+    <OnePOU ID="100004" NAME="AD3_test" isFBD="1" GroupID="0" Enabled="1" POUNum="0" Disc="">
+      <PARAMS DPARAMS="3" HEIGHT="2000" WIDTH="2000" SHABLONPAGEID="0" FONCOLOR="16777215" PRINTWIDTH="0" PRINTHEIGHT="0" PRINTPAGEA4="8"></PARAMS>
+      <ISAGraf>
+        <Blocks>
+          <Block GROBJTYPE="31" Info="_1110_LZIA_10101_main.Out" T11ID="3000216">
+            <Graphics X="680" Y="230" WIDTH="180" HEIGHT="20"></Graphics>
+            <Params T11Text=".Out" CI="1" CO="1" VMODE="0" Commented="true" IsaObjId="17480" cardId="900024">
+              <IV>2(0),-1000,17383,-1000.0,6(0.0),17383.0,0.0,T#0ms,2(FALSE),0.0,FALSE,0,0.0,0,0,0.0,3(FALSE),0.0,0,T#0ms,3(0.0),D#1970-01-01,FALSE,0</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="_1110_LZIA_10101_main.Stat" T11ID="3000217">
+            <Graphics X="680" Y="260" WIDTH="180" HEIGHT="20"></Graphics>
+            <Params T11Text=".Stat" CI="1" CO="1" VMODE="0" Commented="true" IsaObjId="17480" cardId="900024">
+              <IV>2(0),-1000,17383,-1000.0,6(0.0),17383.0,0.0,T#0ms,2(FALSE),0.0,FALSE,0,0.0,0,0,0.0,3(FALSE),0.0,0,T#0ms,3(0.0),D#1970-01-01,FALSE,0</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="_1110_LZIA_10101_main_MOS" T11ID="3000218">
+            <Graphics X="540" Y="580" WIDTH="110" HEIGHT="20"></Graphics>
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="-9" cardId="900025">
+              <IV>FALSE</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="_1110_LZIA_10101_main_SRV" T11ID="3000219">
+            <Graphics X="350" Y="460" WIDTH="110" HEIGHT="20"></Graphics>
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="-9" cardId="900026">
+              <IV>FALSE</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="34" Info="-1000" T11ID="3000220">
+            <Graphics X="360" Y="230" WIDTH="100" HEIGHT="20"></Graphics>
+            <Params T11Text="-1000" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-100" cardId="0"></Params>
+          </Block>
+          <Block GROBJTYPE="37" Info="_1110_LZIA_10101_main" T11ID="3000221">
+            <Graphics X="560" Y="150" WIDTH="100" HEIGHT="400"></Graphics>
+            <Params T11Text="" CI="19" CO="3" VMODE="0" Commented="false" IsaObjId="17480" cardId="900024">
+              <IV>2(0),-1000,17383,-1000.0,6(0.0),17383.0,0.0,T#0ms,2(FALSE),0.0,FALSE,0,0.0,0,0,0.0,3(FALSE),0.0,0,T#0ms,3(0.0),D#1970-01-01,FALSE,0</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="34" Info="17383" T11ID="3000222">
+            <Graphics X="360" Y="370" WIDTH="100" HEIGHT="20"></Graphics>
+            <Params T11Text="17383" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-100" cardId="0"></Params>
+          </Block>
+        </Blocks>
+        <Gotos></Gotos>
+        <Links></Links>
+      </ISAGraf>
+      <GrObj>
+        <OnePrim SourceT11ID="3000223" X="690" Y="180" WIDTH="200" HEIGHT="48" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="337" PenColor="0" BrushColor="15790320" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]=  Копирование для диагностики#  и резервирования&#xA;[FONTID]=65535&#xA;[USERFONT]=8;Times New Roman;0;16757504;&#xA;[HINT]=&#xA;[DELTAST]=2&#xA;[LINEHEIGHT]=14</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="3000224" X="310" Y="110" WIDTH="240" HEIGHT="24" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="81" PenColor="0" BrushColor="16757504" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]= Обработка для отправки на ADR&#xA;[FONTID]=65535&#xA;[USERFONT]=8;Times New Roman;0;15790320;&#xA;[HINT]=&#xA;[DELTAST]=2&#xA;[LINEHEIGHT]=14</PARAMS>
+        </OnePrim>
+      </GrObj>
+    </OnePOU>
+  </POUS>
+  <FONTSTYLES></FONTSTYLES>
+  <ISAOBJSINFO>
+    <rec ID="17480" Info="AD3_v2" LibName="TACSfbl"></rec>
+  </ISAOBJSINFO>
+  <ISACARDSINFO>
+    <rec ID="900024" Info="_1110_LZIA_10101_main" IsRetain="1" Name="_1110_LZIA_10101_main" SSize="0" KLPath=""></rec>
+    <rec ID="900025" Info="_1110_LZIA_10101_main_MOS" IsRetain="1" Name="_1110_LZIA_10101_main_MOS MOS режим" SSize="0" KLPath=""></rec>
+    <rec ID="900026" Info="_1110_LZIA_10101_main_SRV" IsRetain="1" Name="_1110_LZIA_10101_main_SRV Режим тех. обслуживания" SSize="0" KLPath=""></rec>
+  </ISACARDSINFO>
+</BufScadaPOUS>

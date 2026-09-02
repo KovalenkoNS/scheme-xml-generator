@@ -1,0 +1,410 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<BufScadaPOUS>
+  <Common VER="29" Project="{{PROJECT_PATH}}" isCut="false" isFFB="false" ControllerTypeName="{{CONTROLLER_TYPE}}" ControllerID="{{CONTROLLER_ID}}" ResuorceID="{{RESOURCE_ID}}" />
+  <POUS>
+    <OnePOU ID="{{POU_ID}}" NAME="{{POU_NAME}}" isFBD="1" GroupID="{{POU_GROUP_ID}}" Enabled="1" POUNum="{{POU_NUM}}" Disc="{{POU_DISC}}">
+      <PARAMS DPARAMS="{{PAGE_DPARAMS}}" HEIGHT="{{PAGE_HEIGHT}}" WIDTH="{{PAGE_WIDTH}}" SHABLONPAGEID="0" FONCOLOR="{{PAGE_COLOR}}" PRINTWIDTH="0" PRINTHEIGHT="0" PRINTPAGEA4="8" />
+      <ISAGraf>
+        <Blocks>
+          <Block GROBJTYPE="37" Info="{{TAG}}_ADR" T11ID="{{ID_ADR}}">
+            <Graphics X="610" Y="200" WIDTH="100" HEIGHT="200" />
+            <Params T11Text="" CI="9" CO="3" VMODE="0" Commented="false" IsaObjId="17481" cardId="{{CARD_ADR}}">
+              <IV>{{IV_ADR}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="37" Info="{{TAG}}" T11ID="{{ID_AD3}}">
+            <Graphics X="1150" Y="200" WIDTH="100" HEIGHT="400" />
+            <Params T11Text="" CI="19" CO="3" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="37" Info="{{TAG}}_HLB" T11ID="{{ID_HLB}}">
+            <Graphics X="1150" Y="670" WIDTH="100" HEIGHT="350" />
+            <Params T11Text="" CI="13" CO="17" VMODE="0" Commented="false" IsaObjId="18513" cardId="{{CARD_HLB}}">
+              <IV />
+            </Params>
+          </Block>
+          <Block GROBJTYPE="36" Info="PACK8" T11ID="{{ID_PACK8}}">
+            <Graphics X="610" Y="440" WIDTH="100" HEIGHT="180" />
+            <Params T11Text="" CI="8" CO="1" VMODE="0" Commented="true" IsaObjId="804" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="36" Info="INT0" T11ID="{{ID_INT0}}">
+            <Graphics X="770" Y="280" WIDTH="100" HEIGHT="40" />
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="783" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="36" Info="ANY_TO_DINT" T11ID="{{ID_ANY_TO_DINT}}">
+            <Graphics X="950" Y="280" WIDTH="130" HEIGHT="40" />
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="1205" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="36" Info="REAL_TO_DINT" T11ID="{{ID_REAL_TO_DINT}}">
+            <Graphics X="950" Y="200" WIDTH="130" HEIGHT="80" />
+            <Params T11Text="" CI="3" CO="1" VMODE="0" Commented="false" IsaObjId="791" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_0}}">
+            <Graphics X="470" Y="450" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_1}}">
+            <Graphics X="470" Y="470" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_2}}">
+            <Graphics X="470" Y="490" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_3}}">
+            <Graphics X="470" Y="510" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_4}}">
+            <Graphics X="470" Y="530" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_5}}">
+            <Graphics X="470" Y="550" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_7}}">
+            <Graphics X="470" Y="590" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="34" Info="FALSE" T11ID="{{ID_FALSE_6}}">
+            <Graphics X="470" Y="570" WIDTH="100" HEIGHT="20" />
+            <Params T11Text="FALSE" CI="0" CO="1" VMODE="0" Commented="true" IsaObjId="-9" cardId="0" />
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}_SP_HH" T11ID="{{ID_SP_HH}}">
+            <Graphics X="390" Y="420" WIDTH="180" HEIGHT="20" />
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="true" IsaObjId="-7" cardId="{{CARD_SP_HH}}">
+              <IV>{{IV_REAL}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}_SP_LL" T11ID="{{ID_SP_LL}}">
+            <Graphics X="390" Y="400" WIDTH="180" HEIGHT="20" />
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="true" IsaObjId="-7" cardId="{{CARD_SP_LL}}">
+              <IV>{{IV_REAL}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}_SRV" T11ID="{{ID_SRV}}">
+            <Graphics X="1150" Y="610" WIDTH="180" HEIGHT="20" />
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="-9" cardId="{{CARD_SRV}}">
+              <IV>{{IV_BOOL}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}_MOS" T11ID="{{ID_MOS}}">
+            <Graphics X="390" Y="920" WIDTH="180" HEIGHT="20" />
+            <Params T11Text="" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="-9" cardId="{{CARD_MOS}}">
+              <IV>{{IV_BOOL}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.An" T11ID="{{ID_AN}}">
+            <Graphics X="390" Y="820" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".An" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.Pn" T11ID="{{ID_PN}}">
+            <Graphics X="390" Y="780" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".Pn" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.Av" T11ID="{{ID_AV}}">
+            <Graphics X="390" Y="720" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".Av" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.Pv" T11ID="{{ID_PV}}">
+            <Graphics X="390" Y="760" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".Pv" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.PAn" T11ID="{{ID_PAN}}">
+            <Graphics X="390" Y="800" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".PAn" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.PAv" T11ID="{{ID_PAV}}">
+            <Graphics X="390" Y="740" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".PAv" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.IN0" T11ID="{{ID_IN0_CONV}}">
+            <Graphics X="750" Y="230" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".IN0" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.IN0" T11ID="{{ID_IN0_HLB}}">
+            <Graphics X="390" Y="680" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".IN0" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.Out" T11ID="{{ID_OUT_COPY}}">
+            <Graphics X="1450" Y="230" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".Out" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.Out" T11ID="{{ID_OUT_HLB}}">
+            <Graphics X="390" Y="860" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".Out" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.Stat" T11ID="{{ID_STAT_COPY}}">
+            <Graphics X="1490" Y="260" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".Stat" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.IN100" T11ID="{{ID_IN100_CONV}}">
+            <Graphics X="750" Y="250" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".IN100" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.IN100" T11ID="{{ID_IN100_HLB}}">
+            <Graphics X="390" Y="700" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".IN100" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.NSporog" T11ID="{{ID_NSPOROG}}">
+            <Graphics X="390" Y="840" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".NSporog" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+          <Block GROBJTYPE="31" Info="{{TAG}}.Kno_sig" T11ID="{{ID_KNO_SIG}}">
+            <Graphics X="1410" Y="610" WIDTH="180" HEIGHT="20" />
+            <Params T11Text=".Kno_sig" CI="1" CO="1" VMODE="0" Commented="false" IsaObjId="17480" cardId="{{CARD_AD3}}">
+              <IV>{{IV_AD3}}</IV>
+            </Params>
+          </Block>
+        </Blocks>
+        <Gotos />
+        <Links>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,930);(1150,930);" />
+            <FirstPoint FP="{{ID_MOS}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|mos|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(930,240);(950,240);" />
+            <FirstPoint FP="{{ID_IN0_CONV}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_REAL_TO_DINT}}|True|IN0|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,500);(610,500);" />
+            <FirstPoint FP="{{ID_FALSE_2}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN2|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,600);(610,600);" />
+            <FirstPoint FP="{{ID_FALSE_7}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN7|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,520);(610,520);" />
+            <FirstPoint FP="{{ID_FALSE_3}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN3|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,540);(610,540);" />
+            <FirstPoint FP="{{ID_FALSE_4}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN4|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,460);(610,460);" />
+            <FirstPoint FP="{{ID_FALSE_0}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN0|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,560);(610,560);" />
+            <FirstPoint FP="{{ID_FALSE_5}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN5|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,480);(610,480);" />
+            <FirstPoint FP="{{ID_FALSE_1}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN1|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,580);(610,580);" />
+            <FirstPoint FP="{{ID_FALSE_6}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_PACK8}}|True|IN6|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(1330,620);(1410,620);" />
+            <FirstPoint FP="{{ID_SRV}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_KNO_SIG}}|True|0|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(930,260);(950,260);" />
+            <FirstPoint FP="{{ID_IN100_CONV}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_REAL_TO_DINT}}|True|IN100|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,710);(1150,710);" />
+            <FirstPoint FP="{{ID_IN100_HLB}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|in100|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,730);(1150,730);" />
+            <FirstPoint FP="{{ID_AV}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|av_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,830);(1150,830);" />
+            <FirstPoint FP="{{ID_AN}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|an_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,770);(1150,770);" />
+            <FirstPoint FP="{{ID_PV}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|pv_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,690);(1150,690);" />
+            <FirstPoint FP="{{ID_IN0_HLB}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|in000|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,790);(1150,790);" />
+            <FirstPoint FP="{{ID_PN}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|pn_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,810);(1150,810);" />
+            <FirstPoint FP="{{ID_PAN}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|pan_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,750);(1150,750);" />
+            <FirstPoint FP="{{ID_PAV}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|pav_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,850);(1150,850);" />
+            <FirstPoint FP="{{ID_NSPOROG}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|spd_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(570,870);(1150,870);" />
+            <FirstPoint FP="{{ID_OUT_HLB}}|False|0|0,0,100,20" />
+            <LastPoint LP="{{ID_HLB}}|True|adOut_in|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="true" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(710,250);(740,250);(740,220);(950,220);" />
+            <FirstPoint FP="{{ID_ADR}}|False|Out|0,0,100,20" />
+            <LastPoint LP="{{ID_REAL_TO_DINT}}|True|X|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="true" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(1080,240);(1100,240);(1100,220);(1150,220);" />
+            <FirstPoint FP="{{ID_REAL_TO_DINT}}|False|Result|0,0,100,20" />
+            <LastPoint LP="{{ID_AD3}}|True|Xin|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(710,300);(770,300);" />
+            <FirstPoint FP="{{ID_ADR}}|False|Stat|0,0,100,20" />
+            <LastPoint LP="{{ID_INT0}}|True|X|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(870,300);(950,300);" />
+            <FirstPoint FP="{{ID_INT0}}|False|Result|0,0,100,20" />
+            <LastPoint LP="{{ID_ANY_TO_DINT}}|True|Input|0,0,100,20" />
+          </Link>
+          <Link Negative="false" asPointer="false" UserEdit="false" Color="0" GetBitNum="-1" ConvertTo="0">
+            <PointList PL="(1080,300);(1110,300);(1110,240);(1150,240);" />
+            <FirstPoint FP="{{ID_ANY_TO_DINT}}|False|Result|0,0,100,20" />
+            <LastPoint LP="{{ID_AD3}}|True|Xs|0,0,100,20" />
+          </Link>
+        </Links>
+      </ISAGraf>
+      <GrObj>
+        <OnePrim SourceT11ID="{{ID_PRIM_POLYLINE}}" X="184" Y="230" WIDTH="410" HEIGHT="50" OBJTYPE="7" GRNUM="0" DRAWTYPE="0" PenParams="33" PenColor="16757504" BrushColor="16777215" GradColor="536870911" ScriptName="">
+          <PARAMS>[PL]=(720,530);(830,530);(830,580);(1130,580);
+[HINT]=</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="{{ID_PRIM_FRAME}}" X="580" Y="200" WIDTH="820" HEIGHT="820" OBJTYPE="2" GRNUM="0" DRAWTYPE="0" PenParams="289" PenColor="13406761" BrushColor="982994" GradColor="536870911" ScriptName="">
+          <PARAMS>[HINT]=</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="{{ID_PRIM_REG_Y}}" X="360" Y="880" WIDTH="160" HEIGHT="20" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="33" PenColor="0" BrushColor="15586471" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]= Reg.Y
+[FONTID]=65535
+[USERFONT]=12;Trebuchet MS;0;13406761;
+[HINT]=
+[DELTAST]=2
+[LINEHEIGHT]=22</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="{{ID_PRIM_REG_Y2}}" X="360" Y="900" WIDTH="160" HEIGHT="20" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="33" PenColor="0" BrushColor="15586471" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]= Reg.Y2
+[FONTID]=65535
+[USERFONT]=12;Trebuchet MS;0;13406761;
+[HINT]=
+[DELTAST]=2
+[LINEHEIGHT]=22</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="{{ID_PRIM_REG_ZH36}}" X="1460" Y="680" WIDTH="160" HEIGHT="300" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="33" PenColor="0" BrushColor="15586471" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]= Reg_ZH36
+[FONTID]=65535
+[USERFONT]=12;Trebuchet MS;0;13406761;
+[HINT]=
+[DELTAST]=2
+[LINEHEIGHT]=22</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="{{ID_PRIM_COPY_NOTE}}" X="1460" Y="200" WIDTH="160" HEIGHT="20" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="81" PenColor="0" BrushColor="16777215" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]=  Для копирования
+[FONTID]=83
+[USERFONT]=10;Consolas;0;8421504;
+[HINT]=
+[DELTAST]=2
+[LINEHEIGHT]=15</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="{{ID_PRIM_TITLE}}" X="320" Y="120" WIDTH="1080" HEIGHT="40" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="81" PenColor="0" BrushColor="16777215" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]=  Обработка аналогового датчика резервированного
+[FONTID]=81
+[USERFONT]=16;Times New Roman;1;0;
+[HINT]=
+[DELTAST]=2
+[LINEHEIGHT]=24</PARAMS>
+        </OnePrim>
+        <OnePrim SourceT11ID="{{ID_PRIM_HLB_NOTE}}" X="320" Y="640" WIDTH="720" HEIGHT="24" OBJTYPE="1" GRNUM="0" DRAWTYPE="2" PenParams="81" PenColor="0" BrushColor="16777215" GradColor="536870911" ScriptName="">
+          <PARAMS>[TEXT]=  Обновленная мат. обработка "гибких" уставок/ зон по регаменту СТП CP/P2I/МУ09/05 Ред.3.0
+[FONTID]=83
+[USERFONT]=10;Consolas;0;8421504;
+[HINT]=
+[DELTAST]=2
+[LINEHEIGHT]=15</PARAMS>
+        </OnePrim>
+      </GrObj>
+    </OnePOU>
+  </POUS>
+  <FONTSTYLES>
+    <rec ID="81" Name="Заголовок 1" FontName="Times New Roman" FontColor="0" FontSize="16" FontParam="1" />
+    <rec ID="83" Name="Комментарий в коде" FontName="Consolas" FontColor="8421504" FontSize="10" FontParam="0" />
+  </FONTSTYLES>
+  <ISAOBJSINFO>
+    <rec ID="1205" Info="ANY_TO_DINT" LibName="{{LIB_SYSTEM}}" />
+    <rec ID="783" Info="INT0" LibName="TACSfbl" />
+    <rec ID="791" Info="REAL_TO_DINT" LibName="TACSfbl" />
+    <rec ID="804" Info="PACK8" LibName="TACSfbl" />
+    <rec ID="17480" Info="AD3_v2" LibName="TACSfbl" />
+    <rec ID="17481" Info="ADR_v3" LibName="TACSfbl" />
+    <rec ID="18513" Info="AD3_HLB" LibName="{{LIB_USER}}" />
+  </ISAOBJSINFO>
+  <ISACARDSINFO>
+    <rec ID="{{CARD_AD3}}" Info="{{TAG}}" IsRetain="1" Name="{{DISPLAY_NAME}}" SSize="0" KLPath="{{KL_PATH}}" />
+    <rec ID="{{CARD_ADR}}" Info="{{TAG}}_ADR" IsRetain="1" Name="{{DISPLAY_NAME}}" SSize="0" KLPath="{{KL_PATH}}" />
+    <rec ID="{{CARD_HLB}}" Info="{{TAG}}_HLB" IsRetain="1" Name="{{DISPLAY_NAME}} Хранение регламентных значений и приведение к шкале 0..100%" SSize="0" KLPath="{{KL_PATH}}" />
+    <rec ID="{{CARD_MOS}}" Info="{{TAG}}_MOS" IsRetain="1" Name="{{DISPLAY_NAME}} MOS режим" SSize="0" KLPath="{{KL_PATH}}" />
+    <rec ID="{{CARD_SP_HH}}" Info="{{TAG}}_SP_HH" IsRetain="1" Name="{{DISPLAY_NAME}} Уставка верхняя аварийная" SSize="0" KLPath="{{KL_PATH}}" />
+    <rec ID="{{CARD_SP_LL}}" Info="{{TAG}}_SP_LL" IsRetain="1" Name="{{DISPLAY_NAME}} Уставка нижняя аварийная" SSize="0" KLPath="{{KL_PATH}}" />
+    <rec ID="{{CARD_SRV}}" Info="{{TAG}}_SRV" IsRetain="1" Name="{{DISPLAY_NAME}} Режим тех. обслуживания" SSize="0" KLPath="{{KL_PATH}}" />
+  </ISACARDSINFO>
+</BufScadaPOUS>

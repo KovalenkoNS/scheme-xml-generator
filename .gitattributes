@@ -1,0 +1,4 @@
+# Native SCADA exports are reference fixtures; keep their bytes unchanged and
+# do not interpret vendor whitespace/control bytes as source-code changes.
+"XML dev/**" -text -diff
+"XML dev/*.md" -text diff
