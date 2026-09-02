@@ -22,7 +22,7 @@ type outputCommon struct {
 }
 
 type outputPOUS struct {
-	POU outputPOU `xml:"OnePOU"`
+	Items []outputPOU `xml:"OnePOU"`
 }
 
 type outputPOU struct {

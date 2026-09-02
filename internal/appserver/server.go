@@ -3,6 +3,7 @@ package appserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -90,7 +91,7 @@ func (s *Server) handlePreviewName(w http.ResponseWriter, r *http.Request) {
 		ObjectName  string `json:"objectName"`
 		NameMode    string `json:"nameMode"`
 	}
-	if err := decodeJSON(r, &request); err != nil {
+	if err := decodeJSON(w, r, &request); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -109,8 +110,12 @@ func (s *Server) handlePreviewName(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 	var request generator.Request
-	if err := decodeJSON(r, &request); err != nil {
+	if err := decodeJSON(w, r, &request); err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if request.POUs != nil {
+		s.handleDocumentGenerate(w, request)
 		return
 	}
 	ref, ok := s.repository.Resolve(request.TemplateKey)
@@ -118,21 +123,176 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, fmt.Errorf("шаблон не найден; обновите список библиотек"))
 		return
 	}
-	t11Count, cardCount := generator.Requirements(ref)
-	ids, err := s.allocator.Reserve(t11Count, cardCount)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("выделить диапазон ID: %w", err))
+	if supported, warnings := library.TemplateCompatibility(ref); !supported {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("шаблон %q несовместим с генератором: %s", ref.Template.Name, strings.Join(warnings, "; ")))
 		return
 	}
-	result, err := s.generator.Generate(ref, request, ids)
+	t11Count, cardCount := generator.Requirements(ref)
+	if t11Count > maxDocumentObjects || cardCount > maxDocumentCards {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("шаблон слишком велик: не более %d графических объектов и %d карточек", maxDocumentObjects, maxDocumentCards))
+		return
+	}
+	var result generator.Result
+	_, err := s.allocator.WithReservation(t11Count, cardCount, 1, generator.ReservationOptions{
+		T11Start: request.T11Start, CardStart: request.CardStart, POUIDs: []*int64{request.POUID},
+	}, func(ids generator.IDRange) error {
+		var generateErr error
+		result, generateErr = s.generator.Generate(ref, request, ids)
+		return generateErr
+	})
+	if err != nil {
+		var persistenceErr *generator.AllocatorPersistenceError
+		if errors.As(err, &persistenceErr) {
+			writeError(w, http.StatusInternalServerError, err)
+		} else {
+			writeError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	s.writeGeneratedResult(w, request.FileName, ref.Template.Name, result)
+}
+
+const (
+	maxDocumentPOUs    = 128
+	maxDocumentSignals = 4096
+	maxDocumentModules = 4096
+	maxDocumentObjects = 200000
+	maxDocumentCards   = 100000
+)
+
+func (s *Server) handleDocumentGenerate(w http.ResponseWriter, request generator.Request) {
+	normalized, err := generator.NormalizePOURequests(request.POUs)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	fileName := safeOutputName(request.FileName, result.BaseName, ref.Template.Name)
+	request.POUs = normalized
+	if hasLegacyGenerateFields(request) {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("при использовании поля pous настройки POU и сигналов должны находиться внутри соответствующей POU"))
+		return
+	}
+	if len(request.POUs) > maxDocumentPOUs {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("один файл может содержать не более %d POU", maxDocumentPOUs))
+		return
+	}
+
+	keys := make([]string, 0)
+	signalCount := 0
+	moduleCount := 0
+	for pouIndex, pou := range request.POUs {
+		if pou.IO != nil {
+			moduleCount += len(pou.IO.Modules)
+			if moduleCount > maxDocumentModules {
+				writeError(w, http.StatusBadRequest, fmt.Errorf("один файл может содержать не более %d физических модулей", maxDocumentModules))
+				return
+			}
+		}
+		signals := generator.POUSignals(pou)
+		if len(signals) == 0 {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("POU %d не содержит сигналов", pouIndex+1))
+			return
+		}
+		signalCount += len(signals)
+		if signalCount > maxDocumentSignals {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("один файл может содержать не более %d сигналов", maxDocumentSignals))
+			return
+		}
+		for signalIndex, signal := range signals {
+			key := strings.TrimSpace(signal.TemplateKey)
+			if key == "" {
+				key = strings.TrimSpace(pou.DefaultTemplateKey)
+			}
+			if key == "" {
+				writeError(w, http.StatusBadRequest, fmt.Errorf("POU %d, сигнал %d: шаблон не выбран", pouIndex+1, signalIndex+1))
+				return
+			}
+			keys = append(keys, key)
+		}
+	}
+
+	references, missing := s.repository.ResolveMany(keys)
+	if len(missing) > 0 {
+		writeError(w, http.StatusNotFound, fmt.Errorf("шаблоны не найдены; обновите список библиотек: %s", strings.Join(missing, ", ")))
+		return
+	}
+	checked := make(map[string]struct{}, len(references))
+	resolved := make([]generator.ResolvedPOU, 0, len(request.POUs))
+	for pouIndex, pou := range request.POUs {
+		signals := generator.POUSignals(pou)
+		resolvedPOU := generator.ResolvedPOU{Request: pou, Signals: make([]generator.ResolvedSignal, 0, len(signals))}
+		for signalIndex, signal := range signals {
+			key := strings.TrimSpace(signal.TemplateKey)
+			if key == "" {
+				key = strings.TrimSpace(pou.DefaultTemplateKey)
+			}
+			ref := references[key]
+			if _, exists := checked[key]; !exists {
+				supported, warnings := library.TemplateCompatibility(ref)
+				if !supported {
+					writeError(w, http.StatusBadRequest, fmt.Errorf("POU %d, сигнал %d: шаблон %q несовместим с генератором: %s", pouIndex+1, signalIndex+1, ref.Template.Name, strings.Join(warnings, "; ")))
+					return
+				}
+				checked[key] = struct{}{}
+			}
+			effectiveSignal := signal
+			effectiveSignal.TemplateKey = key
+			resolvedPOU.Signals = append(resolvedPOU.Signals, generator.ResolvedSignal{Request: effectiveSignal, Ref: ref})
+		}
+		resolved = append(resolved, resolvedPOU)
+	}
+
+	requirements, err := generator.RequirementsForDocument(resolved)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if requirements.T11Count > maxDocumentObjects || requirements.CardCount > maxDocumentCards {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("документ слишком велик: не более %d графических объектов и %d карточек", maxDocumentObjects, maxDocumentCards))
+		return
+	}
+	pouIDs := make([]*int64, len(request.POUs))
+	for index := range request.POUs {
+		pouIDs[index] = request.POUs[index].POUID
+	}
+	var result generator.Result
+	_, err = s.allocator.WithReservation(requirements.T11Count, requirements.CardCount, requirements.POUCount, generator.ReservationOptions{
+		T11Start: request.T11Start, CardStart: request.CardStart, POUIDs: pouIDs,
+	}, func(ids generator.IDRange) error {
+		var generateErr error
+		result, generateErr = s.generator.GenerateDocument(request, resolved, ids)
+		return generateErr
+	})
+	if err != nil {
+		var persistenceErr *generator.AllocatorPersistenceError
+		if errors.As(err, &persistenceErr) {
+			writeError(w, http.StatusInternalServerError, err)
+		} else {
+			writeError(w, http.StatusBadRequest, err)
+		}
+		return
+	}
+	fallback := "multi_pou"
+	if len(resolved) == 1 && len(resolved[0].Signals) == 1 {
+		fallback = resolved[0].Signals[0].Ref.Template.Name
+	}
+	s.writeGeneratedResult(w, request.FileName, fallback, result)
+}
+
+func hasLegacyGenerateFields(request generator.Request) bool {
+	return strings.TrimSpace(request.TemplateKey) != "" ||
+		strings.TrimSpace(request.ObjectName) != "" ||
+		strings.TrimSpace(request.POUName) != "" ||
+		strings.TrimSpace(request.NameMode) != "" ||
+		strings.TrimSpace(request.Description) != "" ||
+		strings.TrimSpace(request.ClusterPath) != "" ||
+		request.OffsetX != nil || request.OffsetY != nil || request.POUID != nil || request.POUGroupID != nil || request.POUNumber != nil
+}
+
+func (s *Server) writeGeneratedResult(w http.ResponseWriter, requestedName, fallbackName string, result generator.Result) {
+	fileName := safeOutputName(requestedName, result.BaseName, fallbackName)
 	s.outputMu.Lock()
 	defer s.outputMu.Unlock()
-	fileName, err = uniqueOutputName(s.outputDir, fileName)
+	fileName, err := uniqueOutputName(s.outputDir, fileName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -141,7 +301,7 @@ func (s *Server) handleGenerate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("записать результат: %w", err))
 		return
 	}
-	s.logger.Printf("generated %s from %s/%s for %s", fileName, ref.Library.FileName, ref.Template.Name, result.BaseName)
+	s.logger.Printf("generated %s with %d POU and %d signals", fileName, result.Summary.POUCount, result.Summary.SignalCount)
 	writeJSON(w, http.StatusCreated, generateResponse{FileName: fileName, URL: "/api/output/" + url.PathEscape(fileName), BaseName: result.BaseName, Summary: result.Summary, Warnings: result.Warnings})
 }
 
@@ -193,8 +353,7 @@ func (s *Server) localPOST(next http.HandlerFunc) http.HandlerFunc {
 		origin := r.Header.Get("Origin")
 		if origin != "" {
 			parsed, err := url.Parse(origin)
-			host := strings.Split(parsed.Host, ":")[0]
-			if err != nil || (host != "127.0.0.1" && host != "localhost") {
+			if err != nil || parsed == nil || (parsed.Hostname() != "127.0.0.1" && parsed.Hostname() != "localhost") {
 				writeError(w, http.StatusForbidden, fmt.Errorf("запрос отклонён проверкой Origin"))
 				return
 			}
@@ -203,9 +362,11 @@ func (s *Server) localPOST(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func decodeJSON(r *http.Request, target any) error {
+func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	const maxJSONBodyBytes int64 = 8 << 20
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodyBytes)
+	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("неверный JSON: %w", err)

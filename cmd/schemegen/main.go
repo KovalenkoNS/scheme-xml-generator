@@ -64,7 +64,14 @@ func main() {
 	}
 	application := appserver.New(repository, generator.Generator{Config: settings}, allocator, filepath.Join(root, "output"), webui.Files(), logger)
 	address := fmt.Sprintf("%s:%d", settings.ListenAddress, settings.Port)
-	httpServer := &http.Server{Addr: address, Handler: application.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second}
+	httpServer := &http.Server{
+		Addr:              address,
+		Handler:           application.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      2 * time.Minute,
+		IdleTimeout:       60 * time.Second,
+	}
 	pageURL := fmt.Sprintf("http://%s:%d", settings.ListenAddress, settings.Port)
 	if settings.AutoOpen && !*noBrowser {
 		go func() {

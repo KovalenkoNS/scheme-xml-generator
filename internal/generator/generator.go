@@ -20,8 +20,9 @@ type generatedCard struct {
 func Requirements(ref *library.TemplateRef) (t11Count, cardCount int) {
 	cards := make(map[string]struct{})
 	for _, primitive := range ref.Template.Contents.Primitives {
-		if primitive.CardID != "" && primitive.CardID != "0" {
-			cards[primitive.CardID] = struct{}{}
+		cardID := strings.TrimSpace(primitive.CardID)
+		if cardID != "" && cardID != "0" {
+			cards[cardID] = struct{}{}
 		}
 	}
 	return len(ref.Template.Contents.Primitives), len(cards)
@@ -54,6 +55,12 @@ func PreviewName(ref *library.TemplateRef, objectName, mode string) (NamePreview
 }
 
 func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRange) (Result, error) {
+	if len(request.POUs) != 0 {
+		return Result{}, fmt.Errorf("Generate поддерживает только legacy-запрос одного POU; для поля pous используйте GenerateDocument")
+	}
+	if supported, issues := library.TemplateCompatibility(ref); !supported {
+		return Result{}, fmt.Errorf("шаблон несовместим с генератором: %s", strings.Join(issues, "; "))
+	}
 	preview, err := PreviewName(ref, request.ObjectName, request.NameMode)
 	if err != nil {
 		return Result{}, err
@@ -68,7 +75,8 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 	if err := validateText(request.ClusterPath, "KLPath"); err != nil {
 		return Result{}, err
 	}
-	dx, dy := 300, 100
+	layout := library.TemplateLayoutBounds(ref.Template)
+	dx, dy := 300-min(0, layout.MinX), 100-min(0, layout.MinY)
 	if request.OffsetX != nil {
 		dx = *request.OffsetX
 	}
@@ -137,6 +145,9 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 	if err != nil {
 		return Result{}, err
 	}
+	if err := validateUniqueCardInfo(cards); err != nil {
+		return Result{}, err
+	}
 	for _, card := range cards {
 		if card.Source.InitialValue != nil && strings.HasPrefix(*card.Source.InitialValue, "*") {
 			warnings = appendOnce(warnings, "INITIALVALUE с ведущим маркером '*' сохранён буквально; семантика маркера должна поддерживаться целевым импортёром.")
@@ -181,12 +192,13 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 	}
 	blocks := make([]outputBlock, 0, blockCount)
 	for _, primitive := range orderedBlocks {
-		if _, exists := idMap[primitive.ID]; exists {
-			return Result{}, fmt.Errorf("повторный grprim ID=%s", primitive.ID)
+		sourcePrimitiveID := strings.TrimSpace(primitive.ID)
+		if _, exists := idMap[sourcePrimitiveID]; exists {
+			return Result{}, fmt.Errorf("повторный grprim ID=%s", sourcePrimitiveID)
 		}
 		newID := strconv.FormatInt(nextT11, 10)
 		nextT11++
-		idMap[primitive.ID] = newID
+		idMap[sourcePrimitiveID] = newID
 		params := library.ParseParams(primitive.Params)
 		cardID := "0"
 		var initial *string
@@ -306,8 +318,8 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 		cardRecords = append(cardRecords, outputISACard{ID: card.ID, Info: card.Info, IsRetain: "1", Name: card.Name, Size: size, ClusterPath: request.ClusterPath})
 	}
 
-	pageWidth := max(g.Config.Page.Width, library.Int(ref.Template.Width, 0)+dx+g.Config.Page.MarginRight)
-	pageHeight := max(g.Config.Page.Height, library.Int(ref.Template.Height, 0)+dy+g.Config.Page.MarginBottom)
+	pageWidth := max(g.Config.Page.Width, max(library.Int(ref.Template.Width, 0), layout.MaxX)+dx+g.Config.Page.MarginRight)
+	pageHeight := max(g.Config.Page.Height, max(library.Int(ref.Template.Height, 0), layout.MaxY)+dy+g.Config.Page.MarginBottom)
 	version := g.Config.Common.Version
 	if version == "" {
 		version = ref.Library.Version
@@ -318,12 +330,12 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 	}
 	document := outputDocument{
 		Common: outputCommon{Version: version, Project: g.Config.Common.Project, IsCut: "false", IsFFB: "false", ControllerType: g.Config.Common.ControllerType, ControllerID: controllerID, ResourceID: resourceID},
-		POUS: outputPOUS{POU: outputPOU{
+		POUS: outputPOUS{Items: []outputPOU{{
 			ID: strconv.FormatInt(ids.POUID, 10), Name: pouName, IsFBD: "1", GroupID: groupID, Enabled: "1", Number: pouNumber, Description: "",
 			Params:   outputPOUParams{DParams: g.Config.Page.DParams, Height: strconv.Itoa(pageHeight), Width: strconv.Itoa(pageWidth), TemplatePage: "0", Background: g.Config.Page.Background, PrintWidth: "0", PrintHeight: "0", PrintPageA4: "8"},
 			ISAGraf:  outputISAGraf{Blocks: outputBlocks{Items: blocks}, Gotos: outputGotos{}, Links: outputLinks{Items: links}},
 			Graphics: outputGraphics{Items: graphics},
-		}},
+		}}},
 		FontStyles: fontStyles, ISAObjects: outputISAObjects{Items: isaObjects}, ISACards: outputISACards{Items: cardRecords},
 	}
 
@@ -331,7 +343,7 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 	if err != nil {
 		return Result{}, fmt.Errorf("сериализовать SCADA XML: %w", err)
 	}
-	if err := validateGeneratedXML(data, len(primitives), blocks, links, graphics, len(fonts)); err != nil {
+	if err := validateGeneratedXML(data, len(primitives), blocks, links, graphics, len(fonts), false); err != nil {
 		return Result{}, err
 	}
 
@@ -340,6 +352,18 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 		Summary: Summary{
 			Blocks: len(blocks), Links: len(links), Graphics: len(graphics), Cards: len(cards),
 			T11First: ids.T11Start, T11Last: nextT11 - 1, CardFirst: ids.CardStart, CardLast: ids.CardStart + int64(len(cards)) - 1, POUID: ids.POUID, POUName: pouName, POUGroupID: groupID, POUNumber: pouNumber,
+			POUCount: 1, SignalCount: 1,
+			POUs: []POUSummary{{
+				POUID: ids.POUID, POUName: pouName, POUGroupID: groupID, POUNumber: pouNumber,
+				Blocks: len(blocks), Links: len(links), Graphics: len(graphics), Cards: len(cards),
+				T11First: ids.T11Start, T11Last: nextT11 - 1, CardFirst: ids.CardStart, CardLast: ids.CardStart + int64(len(cards)) - 1,
+				Signals: []SignalSummary{{
+					TemplateKey: ref.Key, BaseName: preview.BaseName,
+					Blocks: len(blocks), Links: len(links), Graphics: len(graphics), Cards: len(cards),
+					T11First: ids.T11Start, T11Last: nextT11 - 1, CardFirst: ids.CardStart, CardLast: ids.CardStart + int64(len(cards)) - 1,
+					OffsetX: dx, OffsetY: dy,
+				}},
+			}},
 		},
 	}, nil
 }
@@ -347,9 +371,21 @@ func (g Generator) Generate(ref *library.TemplateRef, request Request, ids IDRan
 func sourceCards(ref *library.TemplateRef) map[string]library.ISAObject {
 	result := make(map[string]library.ISAObject, len(ref.Owner.ISAObjects.Items))
 	for _, card := range ref.Owner.ISAObjects.Items {
-		result[card.ID] = card
+		result[strings.TrimSpace(card.ID)] = card
 	}
 	return result
+}
+
+func validateUniqueCardInfo(cards []*generatedCard) error {
+	seen := make(map[string]string, len(cards))
+	for _, card := range cards {
+		key := strings.ToUpper(strings.TrimSpace(card.Info))
+		if previous, exists := seen[key]; exists {
+			return fmt.Errorf("Card.Info %q повторяется у исходных CARDID=%s и CARDID=%s", card.Info, previous, card.Source.ID)
+		}
+		seen[key] = card.Source.ID
+	}
+	return nil
 }
 
 func buildCards(ref *library.TemplateRef, baseName, description string, start int64) ([]*generatedCard, map[string]*generatedCard, error) {
@@ -411,7 +447,7 @@ func rewriteEndpoint(raw string, idMap map[string]string) (string, error) {
 	if len(parts) != 4 {
 		return "", fmt.Errorf("неверный endpoint %q", raw)
 	}
-	newID, ok := idMap[parts[0]]
+	newID, ok := idMap[strings.TrimSpace(parts[0])]
 	if !ok {
 		return "", fmt.Errorf("endpoint ссылается на неизвестный block ID=%s", parts[0])
 	}
@@ -542,6 +578,9 @@ func normalizeObjectName(ref *library.TemplateRef, value, mode string) (string, 
 }
 
 func validateIdentifier(value string) error {
+	if len([]rune(value)) > 160 {
+		return fmt.Errorf("имя объекта не должно быть длиннее 160 символов")
+	}
 	for _, r := range value {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '.' || r == '-' {
 			continue
@@ -552,6 +591,9 @@ func validateIdentifier(value string) error {
 }
 
 func validateText(value, field string) error {
+	if len([]rune(value)) > 500 {
+		return fmt.Errorf("%s не должно быть длиннее 500 символов", field)
+	}
 	for _, r := range value {
 		if r == '\t' || r == '\n' || r == '\r' || r >= 0x20 {
 			continue

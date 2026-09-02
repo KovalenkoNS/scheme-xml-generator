@@ -10,7 +10,7 @@ func TestSerializeSCADALexicalContractAndIVStates(t *testing.T) {
 	empty := ""
 	document := outputDocument{
 		Common: outputCommon{Version: "29", Project: "", IsCut: "false", IsFFB: "false", ControllerType: "", ControllerID: "0", ResourceID: "0"},
-		POUS: outputPOUS{POU: outputPOU{
+		POUS: outputPOUS{Items: []outputPOU{{
 			ID: "1", Name: "AD3_test", IsFBD: "1", GroupID: "0", Enabled: "1", Number: "0", Description: "",
 			Params: outputPOUParams{DParams: "3", Height: "2000", Width: "2000", TemplatePage: "0", Background: "16777215", PrintWidth: "0", PrintHeight: "0", PrintPageA4: "8"},
 			ISAGraf: outputISAGraf{
@@ -21,7 +21,7 @@ func TestSerializeSCADALexicalContractAndIVStates(t *testing.T) {
 				Gotos: outputGotos{}, Links: outputLinks{},
 			},
 			Graphics: outputGraphics{Items: []outputPrimitive{{SourceT11ID: "12", Params: "line1\nline2"}}},
-		}},
+		}}},
 		ISAObjects: outputISAObjects{},
 		ISACards:   outputISACards{},
 	}

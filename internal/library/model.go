@@ -125,6 +125,7 @@ type LoadedLibrary struct {
 	FileName       string
 	Path           string
 	Version        string
+	Warnings       []string
 	Document       *Document
 	FontStyles     map[string]FontStyle
 	TypeSignatures map[string]Signature

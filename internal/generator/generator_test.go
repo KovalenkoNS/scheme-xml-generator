@@ -3,6 +3,7 @@ package generator
 import (
 	"bytes"
 	"encoding/xml"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -53,8 +54,16 @@ type parsedPOUHeader struct {
 
 func loadTestRepository(t *testing.T) (*library.Repository, library.Catalog) {
 	t.Helper()
-	directory, err := filepath.Abs(filepath.Join("..", "..", "libraries"))
+	source, err := filepath.Abs(filepath.Join("..", "..", "libraries", "Library AD3_v2.xml"))
 	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "Library AD3_v2.xml"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	repository := library.NewRepository(directory)
@@ -272,6 +281,16 @@ func TestNormalizeBoolRejectsUnknownLexeme(t *testing.T) {
 	}
 }
 
+func TestLegacyCardInfoMustBeUnique(t *testing.T) {
+	cards := []*generatedCard{
+		{Source: library.ISAObject{ID: "1"}, Info: "_OBJECT_DUP"},
+		{Source: library.ISAObject{ID: "2"}, Info: "_object_dup"},
+	}
+	if err := validateUniqueCardInfo(cards); err == nil {
+		t.Fatal("duplicate legacy Card.Info was accepted")
+	}
+}
+
 func assertCardOwnersPrecedeFields(t *testing.T, parsed parsedOutput) {
 	t.Helper()
 	cardInfo := make(map[string]string, len(parsed.Cards))
@@ -315,5 +334,19 @@ func assertSCADADialectOutput(t *testing.T, data []byte, fontCount int) {
 	}
 	if fontCount == 0 && bytes.Contains(data, []byte("<FONTSTYLES")) {
 		t.Error("empty FONTSTYLES must be omitted")
+	}
+}
+
+func TestGeneratorEnforcesServerSideTextLengths(t *testing.T) {
+	ref := loadTemplateByID(t, "17510")
+	ids := IDRange{T11Start: 4_800_000, CardStart: 880_000, POUID: 280_000}
+	if _, err := PreviewName(ref, strings.Repeat("A", 161), "base"); err == nil {
+		t.Fatal("object name longer than 160 characters was accepted")
+	}
+	if _, err := (Generator{Config: config.Default()}).Generate(ref, Request{ObjectName: "VALID", POUName: "VALID_POU", NameMode: "base", Description: strings.Repeat("D", 501)}, ids); err == nil {
+		t.Fatal("description longer than 500 characters was accepted")
+	}
+	if _, err := (Generator{Config: config.Default()}).Generate(ref, Request{ObjectName: "VALID", POUName: "VALID_POU", NameMode: "base", ClusterPath: strings.Repeat("K", 501)}, ids); err == nil {
+		t.Fatal("KLPath longer than 500 characters was accepted")
 	}
 }
