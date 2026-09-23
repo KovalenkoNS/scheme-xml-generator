@@ -15,6 +15,12 @@ var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
 // exporter. Its importer is sensitive to formatting text nodes and to the
 // distinction between an empty value and a self-closing element.
 func serializeSCADA(document outputDocument) ([]byte, error) {
+	return serializeSCADAValue(document)
+}
+
+// serializeSCADAValue also supports native ST documents, which intentionally
+// have no graphical object or card sections.
+func serializeSCADAValue(document any) ([]byte, error) {
 	marshaled, err := xml.Marshal(document)
 	if err != nil {
 		return nil, err

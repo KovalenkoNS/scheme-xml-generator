@@ -1,0 +1,326 @@
+package generator
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"unicode/utf8"
+
+	"scheme-xml-generator/internal/iomap"
+)
+
+func plcDiagnosticTestSource() *iomap.Plan {
+	c := iomap.Controller{Key: "B01:cabinet", Name: "3000_D_SC_B01", SourceFCS: "3000_D_SC_B01", Cabinet: "C1", Racks: []iomap.Rack{{Name: "A10", Panel: "front", Order: 0}, {Name: "A12", Panel: "back", Order: 0}}}
+	for _, spec := range []struct {
+		rack     string
+		slot     int
+		kind     string
+		capacity int
+	}{{"A10", 2, "AI16H", 16}, {"A10", 3, "AOC4H", 4}, {"A10", 4, "AOC4H", 4}, {"A10", 5, "DI32", 32}, {"A10", 6, "DO32P", 32}, {"A12", 0, "AI16H", 16}} {
+		m := iomap.Module{Name: fmt.Sprintf("%s_%02d", spec.rack, spec.slot), Rack: spec.rack, Slot: spec.slot, Type: spec.kind, Capacity: spec.capacity}
+		for channel := 0; channel < spec.capacity; channel++ {
+			kind := "D32V"
+			if spec.kind == "AI16H" {
+				kind = "AD3_v2"
+			}
+			if spec.kind == "AOC4H" {
+				kind = "AN_v1"
+			}
+			ch := iomap.Channel{Channel: channel, Tag: fmt.Sprintf("_%s_%s_%d", c.Name, m.Name, channel), ObjectType: kind, Reserve: true, SourceRow: channel + 2}
+			if spec.kind == "AOC4H" && channel == 0 {
+				ch.Tag = "_3107_TV_64101A"
+				ch.Reserve = false
+				ch.Redundant = spec.slot == 4
+			}
+			m.Channels = append(m.Channels, ch)
+		}
+		c.Modules = append(c.Modules, m)
+	}
+	return &iomap.Plan{SheetName: "IO", Controllers: []iomap.Controller{c}}
+}
+
+func buildPLCDiagnosticTest(t *testing.T) (PLCDiagnosticPlan, Result, plcDiagnosticDocument) {
+	t.Helper()
+	ctx := DefaultAODiagnosticContext()
+	plans, err := PreparePLCDiagnosticPlans(plcDiagnosticTestSource(), []iomap.Selection{{Key: "B01:cabinet"}}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc plcDiagnosticDocument
+	if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, utf8BOM), &doc); err != nil {
+		t.Fatal(err)
+	}
+	return plans[0], result, doc
+}
+
+func TestPLCDiagnosticHierarchyAndNativeProfile(t *testing.T) {
+	plan, result, doc := buildPLCDiagnosticTest(t)
+	if plan.FrameCount != 7 || plan.T11Count != 97 || plan.CardCount != 46 || plan.SignalCount != 104 {
+		t.Fatalf("wrong reservation %+v", plan)
+	}
+	if result.Summary.Graphics != 77 || result.Summary.IOModuleCount != 6 || result.Summary.POUCount != 0 {
+		t.Fatalf("summary %+v", result.Summary)
+	}
+	if !utf8.Valid(result.XML) || bytes.Contains(result.XML, []byte("�")) || bytes.Contains(result.XML, []byte("POUS")) {
+		t.Fatal("invalid encoding or program document")
+	}
+	if len(doc.Pages) != 1 || len(doc.Pages[0].Children.Pages) != 2 || len(doc.Pictures) != 3 || len(doc.Symbols) != 10 {
+		t.Fatal("missing hierarchy/resources")
+	}
+	if err := validatePLCReferences(doc); err != nil {
+		t.Fatal(err)
+	}
+	back, front := doc.Pages[0].Children.Pages[0], doc.Pages[0].Children.Pages[1]
+	if !strings.HasSuffix(back.Name, "Задняя панель") || !strings.HasSuffix(front.Name, "Передняя панель") || front.TemplateID != "6580" || len(front.Children.Pages) != 3 || len(back.Children.Pages) != 1 {
+		t.Fatal("wrong panels/child ownership")
+	}
+	ai := front.Children.Pages[0]
+	if ai.Name != "AI_B01_A10_02_AI16H" || ai.Height != "448" || ai.DParams != "2" || ai.FrameNumber != "4" || len(ai.PageLayers[0].Primitives) != 17 {
+		t.Fatalf("wrong AI page %+v", ai)
+	}
+	for i, p := range ai.PageLayers[0].Primitives[1:] {
+		if p.Y != fmt.Sprint(54+24*i+2*(i/4)) || p.X != "70" || p.Width != "1080" || p.Height != "24" {
+			t.Fatalf("wrong channel geometry %d %+v", i, p)
+		}
+		ms := "4730"
+		if i%2 == 1 {
+			ms = "4731"
+		}
+		if p.ObjectMSID != ms {
+			t.Fatal("wrong AI alternating symbol")
+		}
+	}
+	ao := front.Children.Pages[1]
+	if ao.Name != "AO_B01_A10_03_AOC4H" || ao.Height != "152" || ao.DParams != "66" || ao.FrameNumber != "5" || ao.PageLayers[0].Primitives[0].CardID != "0" {
+		t.Fatal("wrong AO profile")
+	}
+	if ao.PageLayers[0].Primitives[1].CardID != front.Children.Pages[2].PageLayers[0].Primitives[1].CardID {
+		t.Fatal("redundant AO must share signal card without dropping physical row")
+	}
+	if len(doc.CardParams) != 6 {
+		t.Fatal("ack must cover AI/AO/DI/DO")
+	}
+	var d32 int
+	for _, param := range doc.CardParams {
+		if strings.Contains(param.Info, "([]D32_КОМ. КВИТИРОВАТЬ)") {
+			d32++
+		}
+	}
+	if d32 != 2 {
+		t.Fatal("wrong digital ack")
+	}
+	for _, p := range front.PageLayers[0].Primitives {
+		if p.ObjectMSID == "3657" || p.ObjectMSID == "3658" {
+			if p.Receptors != nil {
+				t.Fatal("native DI/DO must have no invented child receptor")
+			}
+		}
+	}
+	if len(result.Warnings) < 2 {
+		t.Fatal("missing external dependency and CPU convention warnings")
+	}
+}
+
+func TestPLCDiagnosticRenameSnapshotAndNoForeignBindings(t *testing.T) {
+	source := plcDiagnosticTestSource()
+	ctx := DefaultAODiagnosticContext()
+	plans, err := PreparePLCDiagnosticPlans(source, []iomap.Selection{{Key: "B01:cabinet", Name: "3000_D_SC_B07_2"}}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if source.Controllers[0].Modules[0].Channels[0].Tag != "_3000_D_SC_B01_A10_02_0" {
+		t.Fatal("prepare mutated source")
+	}
+	source.Controllers[0].Modules[0].Channels[0].Tag = "CORRUPTED"
+	source.Controllers[0].Racks[0].Panel = "invalid"
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(result.XML, []byte("3000_D_SC_B01")) || bytes.Contains(result.XML, []byte("CORRUPTED")) || !bytes.Contains(result.XML, []byte("AO_B07_2_A10_03_AOC4H")) || !bytes.Contains(result.XML, []byte("_3107_TV_64101A/(AN_v1)")) {
+		t.Fatal("wrong rename/deep snapshot")
+	}
+}
+
+func TestPLCDiagnosticRejectsInvalidPlans(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*iomap.Plan)
+	}{
+		{"cpu collision", func(p *iomap.Plan) { m := &p.Controllers[0].Modules[0]; m.Slot = 0; m.Name = "A10_00" }},
+		{"duplicate rack position", func(p *iomap.Plan) { p.Controllers[0].Racks[1].Panel = "front" }},
+		{"unknown type", func(p *iomap.Plan) { p.Controllers[0].Modules[0].Type = "UNKNOWN" }},
+		{"missing channel", func(p *iomap.Plan) { p.Controllers[0].Modules[0].Channels = p.Controllers[0].Modules[0].Channels[:15] }},
+		{"nonsequential channel", func(p *iomap.Plan) { p.Controllers[0].Modules[0].Channels[1].Channel = 4 }},
+		{"invalid real tag", func(p *iomap.Plan) { p.Controllers[0].Modules[1].Channels[0].Tag = "invalid/tag" }},
+		{"wrong signal object", func(p *iomap.Plan) { p.Controllers[0].Modules[0].Channels[0].ObjectType = "AN_v1" }},
+		{"duplicate module", func(p *iomap.Plan) {
+			p.Controllers[0].Modules = append(p.Controllers[0].Modules, p.Controllers[0].Modules[0])
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			source := plcDiagnosticTestSource()
+			tc.mutate(source)
+			if _, err := PreparePLCDiagnosticPlans(source, []iomap.Selection{{Key: "B01:cabinet"}}, DefaultAODiagnosticContext()); err == nil {
+				t.Fatal("accepted invalid inventory")
+			}
+		})
+	}
+	plan, _, _ := buildPLCDiagnosticTest(t)
+	plan.T11Count--
+	if _, err := (Generator{}).GeneratePLCDiagnostic(plan, DefaultAODiagnosticContext(), DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000}); err == nil {
+		t.Fatal("accepted changed reservation")
+	}
+	plan.T11Count++
+	if _, err := (Generator{}).GeneratePLCDiagnostic(plan, DefaultAODiagnosticContext(), DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 4705}); err == nil {
+		t.Fatal("accepted collision with external group")
+	}
+}
+
+func TestPLCDiagnosticReferenceValidationRejectsBrokenEdges(t *testing.T) {
+	_, _, doc := buildPLCDiagnosticTest(t)
+	front := &doc.Pages[0].Children.Pages[1]
+	for i := range front.PageLayers[0].Primitives {
+		p := &front.PageLayers[0].Primitives[i]
+		if p.Receptors != nil && p.Receptors.Items[0].Type == "1" {
+			p.Receptors.Items[0].Int = "9999999"
+			break
+		}
+	}
+	if err := validatePLCReferences(doc); err == nil {
+		t.Fatal("accepted dangling page receptor")
+	}
+	_, _, doc = buildPLCDiagnosticTest(t)
+	front = &doc.Pages[0].Children.Pages[1]
+	for i := range front.PageLayers[0].Primitives {
+		p := &front.PageLayers[0].Primitives[i]
+		if p.Receptors != nil && p.Receptors.Items[0].Type == "3" {
+			p.Receptors.Items[0].Charts.Items[0].ParentID = "7"
+			break
+		}
+	}
+	if err := validatePLCReferences(doc); err == nil {
+		t.Fatal("accepted wrong chart parent")
+	}
+}
+
+func TestPLCDiagnosticEmptyRearAndMoreThanTwoRacks(t *testing.T) {
+	source := plcDiagnosticTestSource()
+	source.Controllers[0].Racks[1].Panel = "front"
+	source.Controllers[0].Racks[1].Order = 2
+	plans, err := PreparePLCDiagnosticPlans(source, []iomap.Selection{{Key: "B01:cabinet"}}, DefaultAODiagnosticContext())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], DefaultAODiagnosticContext(), DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc plcDiagnosticDocument
+	if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, utf8BOM), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Pages[0].Children.Pages[1].Height != "1400" || len(doc.Pages[0].Children.Pages[0].Children.Pages) != 0 {
+		t.Fatal("wrong expanded/empty panel")
+	}
+}
+
+func TestPLCDiagnosticMixedWidthRacksChooseNaturalFirstCPU(t *testing.T) {
+	source := plcDiagnosticTestSource()
+	c := &source.Controllers[0]
+	c.Racks = []iomap.Rack{{Name: "A10", Panel: "front", Order: 0}, {Name: "A2", Panel: "back", Order: 0}}
+	ai, ao := c.Modules[0], c.Modules[1]
+	ai.Name, ai.Rack, ai.Slot = "A2_02", "A2", 2
+	// A10 is not the first numeric rack; its slots 00/01 must remain available.
+	ao.Name, ao.Rack, ao.Slot = "A10_00", "A10", 0
+	c.Modules = []iomap.Module{ao, ai}
+	ctx := DefaultAODiagnosticContext()
+	plans, err := PreparePLCDiagnosticPlans(source, []iomap.Selection{{Key: c.Key}}, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plans[0].Controller.Racks[0].Name != "A2" || plans[0].Controller.Modules[0].Name != "A2_02" {
+		t.Fatal("rack/module sorting is not natural numeric order")
+	}
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc plcDiagnosticDocument
+	if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, utf8BOM), &doc); err != nil {
+		t.Fatal(err)
+	}
+	cpuCount := 0
+	for _, panel := range doc.Pages[0].Children.Pages {
+		for _, p := range panel.PageLayers[0].Primitives {
+			if p.ObjectMSID == "4234" {
+				cpuCount++
+				if !strings.HasSuffix(panel.Name, "Задняя панель") || p.X != "95" || p.Y != "90" {
+					t.Fatal("CPU not placed in natural-first A2 rack")
+				}
+			}
+		}
+	}
+	if cpuCount != 1 {
+		t.Fatal("expected exactly one CPU")
+	}
+	c.Modules[1].Name, c.Modules[1].Slot = "A2_00", 0
+	if _, err := PreparePLCDiagnosticPlans(source, []iomap.Selection{{Key: c.Key}}, ctx); err == nil {
+		t.Fatal("allowed collision with CPU in natural-first A2 rack")
+	}
+}
+
+// A supplied development workbook is optional; the self-contained tests above
+// always run. This integration exercises every selected PLC, including naming
+// collisions resolved by the IO parser and wholly spare physical modules.
+func TestPLCDiagnosticFullIOIntegration(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "output", "Full_IO.xlsx"))
+	if os.IsNotExist(err) {
+		t.Skip("Full_IO development workbook is not installed")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := iomap.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selected []iomap.Selection
+	for _, controller := range source.Controllers {
+		selected = append(selected, iomap.Selection{Key: controller.Key})
+	}
+	ctx := DefaultAODiagnosticContext()
+	plans, err := PreparePLCDiagnosticPlans(source, selected, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := DiagnosticIDRange{T11Start: 1000000, CardStart: 1000000, PageStart: 1000000}
+	var modules, signals int
+	for _, plan := range plans {
+		result, err := (Generator{}).GeneratePLCDiagnostic(plan, ctx, ids)
+		if err != nil {
+			t.Fatalf("%s: %v", plan.FCS, err)
+		}
+		if result.Summary.T11Last != ids.T11Start+int64(plan.T11Count)-1 {
+			t.Fatal("reservation mismatch")
+		}
+		modules += result.Summary.IOModuleCount
+		signals += result.Summary.SignalCount
+		t.Logf("%s: %d modules, %d signals, %d frames, %d primitives, %d transport IDs, %d cards", plan.FCS, result.Summary.IOModuleCount, result.Summary.SignalCount, plan.FrameCount, result.Summary.Graphics, plan.T11Count, plan.CardCount)
+		ids.T11Start += int64(plan.T11Count)
+		ids.CardStart += int64(plan.CardCount)
+		ids.PageStart += int64(plan.FrameCount)
+	}
+	if modules != source.ModuleCount || signals != source.SignalCount {
+		t.Fatalf("lost inventory: got %d/%d, want %d/%d", modules, signals, source.ModuleCount, source.SignalCount)
+	}
+}

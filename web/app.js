@@ -90,6 +90,7 @@
   }
 
   function bindEvents() {
+    window.addEventListener("schemegen:outputs-changed", () => loadOutputs({ announceErrors: false }));
     elements.reloadAll.addEventListener("click", refreshLibraries);
     elements.reloadOutputs.addEventListener("click", () => loadOutputs({ announceErrors: true }));
     elements.addPou.addEventListener("click", () => addPou({ focus: true }));

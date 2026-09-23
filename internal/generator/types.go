@@ -99,6 +99,19 @@ type IDRange struct {
 	POUID     int64
 }
 
+// DiagnosticIDRange belongs to operator-panel pages, not program POUs.
+type DiagnosticIDRange struct {
+	T11Start  int64
+	CardStart int64
+	PageStart int64
+}
+
+type DiagnosticFrameSummary struct {
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	Module string `json:"module"`
+}
+
 type NamePreview struct {
 	BaseName      string   `json:"baseName"`
 	MatchedPrefix string   `json:"matchedPrefix"`
@@ -106,22 +119,24 @@ type NamePreview struct {
 }
 
 type Summary struct {
-	Blocks        int          `json:"blocks"`
-	Links         int          `json:"links"`
-	Graphics      int          `json:"graphics"`
-	Cards         int          `json:"cards"`
-	T11First      int64        `json:"t11First"`
-	T11Last       int64        `json:"t11Last"`
-	CardFirst     int64        `json:"cardFirst"`
-	CardLast      int64        `json:"cardLast"`
-	POUID         int64        `json:"pouId"`
-	POUName       string       `json:"pouName"`
-	POUGroupID    string       `json:"pouGroupId"`
-	POUNumber     string       `json:"pouNumber"`
-	POUCount      int          `json:"pouCount"`
-	SignalCount   int          `json:"signalCount"`
-	IOModuleCount int          `json:"ioModuleCount,omitempty"`
-	POUs          []POUSummary `json:"pous"`
+	FrameCount    int                      `json:"frameCount,omitempty"`
+	Frames        []DiagnosticFrameSummary `json:"frames,omitempty"`
+	Blocks        int                      `json:"blocks"`
+	Links         int                      `json:"links"`
+	Graphics      int                      `json:"graphics"`
+	Cards         int                      `json:"cards"`
+	T11First      int64                    `json:"t11First"`
+	T11Last       int64                    `json:"t11Last"`
+	CardFirst     int64                    `json:"cardFirst"`
+	CardLast      int64                    `json:"cardLast"`
+	POUID         int64                    `json:"pouId"`
+	POUName       string                   `json:"pouName"`
+	POUGroupID    string                   `json:"pouGroupId"`
+	POUNumber     string                   `json:"pouNumber"`
+	POUCount      int                      `json:"pouCount"`
+	SignalCount   int                      `json:"signalCount"`
+	IOModuleCount int                      `json:"ioModuleCount,omitempty"`
+	POUs          []POUSummary             `json:"pous"`
 }
 
 type SignalSummary struct {

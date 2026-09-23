@@ -38,6 +38,7 @@ type IDDefaults struct {
 	NextT11  int64 `json:"nextT11"`
 	NextCard int64 `json:"nextCard"`
 	NextPOU  int64 `json:"nextPou"`
+	NextPage int64 `json:"nextPage"`
 }
 
 func Default() Config {
@@ -51,7 +52,7 @@ func Default() Config {
 		Page: PageDefaults{
 			DParams: "3", Width: 2000, Height: 2000, Background: "16777215", GroupID: "0", POUNumber: "0", MarginRight: 200, MarginBottom: 200,
 		},
-		IDs: IDDefaults{NextT11: 3000000, NextCard: 900000, NextPOU: 100000},
+		IDs: IDDefaults{NextT11: 3000000, NextCard: 900000, NextPOU: 100000, NextPage: 1000000},
 	}
 }
 

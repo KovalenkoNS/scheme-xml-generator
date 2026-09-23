@@ -58,6 +58,12 @@ func validateGeneratedXML(data []byte, primitiveCount int, blocks []outputBlock,
 }
 
 func validateGeneratedDocumentXML(data []byte, primitiveCount int, document outputDocument) error {
+	return validateGeneratedDocumentForProfile(data, primitiveCount, document, false)
+}
+
+// nativeAO permits the exact AN_v1 card/block form observed in the AO export.
+// Ordinary library generation retains its existing, stricter policy.
+func validateGeneratedDocumentForProfile(data []byte, primitiveCount int, document outputDocument, nativeAO bool) error {
 	if len(document.POUS.Items) == 0 {
 		return fmt.Errorf("созданный документ не содержит POU")
 	}
@@ -132,7 +138,8 @@ func validateGeneratedDocumentXML(data []byte, primitiveCount int, document outp
 		if cardRetain[block.Params.CardID] == "-1" {
 			isExternalChannel := block.ObjectType == "38"
 			isDigitalModule := block.ObjectType == "37" && block.Params.ISAObjectID == "1933"
-			if !isExternalChannel && !isDigitalModule {
+			isNativeAO := nativeAO && block.ObjectType == "37" && block.Params.ISAObjectID == "888" && block.Params.CI == "7" && block.Params.CO == "2" && block.Params.Initial != nil && *block.Params.Initial == ",,,100.0"
+			if !isExternalChannel && !isDigitalModule && !isNativeAO {
 				return fmt.Errorf("физическая карточка cardId=%s используется неподдерживаемым блоком GROBJTYPE=%s IsaObjId=%s", block.Params.CardID, block.ObjectType, block.Params.ISAObjectID)
 			}
 			negativeUsage[block.Params.CardID]++

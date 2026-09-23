@@ -27,6 +27,11 @@
         </span>
       </div>
 
+      <nav class="workspace-tabs" role="tablist" aria-label="Раздел приложения">
+        <button id="scheme-tab" class="workspace-tab" type="button" role="tab" aria-selected="true" aria-controls="main-content">Генератор схем</button>
+        <button id="temporary-tab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="temporary-content" tabindex="-1">Временные решения</button>
+      </nav>
+
       <div class="topbar-actions">
         <span id="connection-status" class="connection-status" data-state="checking" role="status">
           <span class="status-dot" aria-hidden="true"></span>
@@ -40,7 +45,7 @@
       </div>
     </header>
 
-    <main id="main-content" class="main-layout">
+    <main id="main-content" class="main-layout" role="tabpanel" aria-labelledby="scheme-tab" tabindex="0">
       <aside id="catalog-panel" class="catalog-panel" aria-labelledby="catalog-title">
         <div class="catalog-heading">
           <div>
@@ -176,6 +181,113 @@
         </article>
       </section>
     </main>
+
+    <section id="temporary-content" class="temporary-workspace" role="tabpanel" aria-labelledby="temporary-tab" tabindex="0" hidden>
+      <article class="temporary-tool" aria-labelledby="temporary-title">
+        <div class="temporary-heading">
+          <div>
+            <p class="eyebrow">Временные решения · SCADA</p>
+            <h1 id="temporary-title">Карта сигналов → XML</h1>
+          </div>
+          <span id="temporary-profile-badge" class="temporary-profile-badge">Профиль AN_v1</span>
+        </div>
+        <p class="temporary-description">AO FBD/ST — по TXT-карте. Полная диагностика ПЛК — по исходной книге Excel IO: панели шкафа, модули и дочерние кадры с переходами. Для каждого выбранного ПЛК создаётся отдельный XML.</p>
+
+        <form id="temporary-form">
+          <div class="temporary-mode-bar">
+            <label class="temporary-field" for="temporary-mode">
+              <span>Режим генерации</span>
+              <select id="temporary-mode"><option value="fbd">FBD · графическая</option><option value="st">ST · физические выходы</option><option value="diagnostic">Диагностика · панель оператора</option></select>
+            </label>
+            <p id="temporary-mode-note" class="temporary-preview-note">Графические POU AO_A11, AO_A12. Повторные теги оставляют пустые позиции.</p>
+          </div>
+          <div class="temporary-toolbar">
+            <label class="temporary-field temporary-file-field" for="temporary-file">
+              <span id="temporary-file-caption">Карта сигналов · TXT / TSV, до 2 МБ</span>
+              <input id="temporary-file" name="file" type="file" accept=".txt,.tsv,text/plain,text/tab-separated-values" required>
+            </label>
+            <label class="temporary-field" for="temporary-filename">
+              <span>Базовое имя файлов · FCS добавится автоматически</span>
+              <input id="temporary-filename" type="text" maxlength="180" value="AO_import" spellcheck="false" autocomplete="off" required>
+            </label>
+            <button id="temporary-generate" class="button button-primary" type="submit" disabled>
+              <span class="button-spinner" aria-hidden="true"></span>
+              <span>Создать XML</span>
+            </button>
+          </div>
+
+          <section id="temporary-st-settings" class="temporary-st-settings" aria-label="Модули ST по POU" hidden>
+            <p class="temporary-preview-note">Отметьте нужные ПЛК (FCS) или отдельные POU. В XML попадёт только выбранное: для каждого ПЛК — свой файл, без смешивания POU разных ПЛК. Настройки модулей и ID раскрываются отдельно.</p>
+            <div class="temporary-st-selection-toolbar">
+              <button id="temporary-st-select-all" class="button button-secondary button-small" type="button" disabled>Выбрать всё</button>
+              <button id="temporary-st-clear-selection" class="button button-secondary button-small" type="button" disabled>Снять выбор</button>
+              <span id="temporary-st-selection-summary" role="status">POU не выбраны</span>
+            </div>
+            <p id="temporary-st-empty" class="temporary-status">Загрузите TXT-карту, чтобы настроить POU.</p>
+            <p id="temporary-st-selection-empty" class="temporary-status" hidden>Ничего не выбрано. Отметьте хотя бы одну POU или весь нужный ПЛК.</p>
+            <div id="temporary-st-pous" class="temporary-st-pous"></div>
+            <p class="temporary-preview-note">Один модуль — 4 AO, каналы 0–3. Начальные ID 0, 1, 2… — заготовка: укажите реальные ID физических модулей. Внутри одного ПЛК ID должны быть уникальны; в разных ПЛК могут совпадать.</p>
+            <p id="temporary-st-extra-note" class="temporary-preview-note" hidden>Добавленные модули используют резервные теги вида _FCS_A11_14_0. Эти объекты должны существовать в SCADA; этот режим создаёт только ST, не графические экземпляры.</p>
+          </section>
+
+          <section id="temporary-diagnostic-settings" class="temporary-st-settings" aria-label="Кадры диагностики по ПЛК" hidden>
+            <p class="temporary-preview-note">Загрузите исходную книгу Full_IO (.xlsx), не перекладку AI/AO. Отметьте ПЛК и при необходимости измените имена на используемые в проекте SCADA. Один XML содержит всю группу ПЛК: панели, дочерние кадры AI/AO и внутренние рецепторы переходов.</p>
+            <div class="temporary-st-selection-toolbar">
+              <button id="temporary-diagnostic-select-all" class="button button-secondary button-small" type="button" disabled>Выбрать все ПЛК</button>
+              <button id="temporary-diagnostic-clear-selection" class="button button-secondary button-small" type="button" disabled>Снять выбор</button>
+              <span id="temporary-diagnostic-selection-summary" role="status">ПЛК не выбраны</span>
+            </div>
+            <p id="temporary-diagnostic-empty" class="temporary-status">Загрузите книгу IO (.xlsx), чтобы выбрать ПЛК.</p>
+            <p id="temporary-diagnostic-selection-empty" class="temporary-status" hidden>Ничего не выбрано. Отметьте хотя бы один ПЛК.</p>
+            <div id="temporary-diagnostic-plcs" class="temporary-st-pous"></div>
+            <p class="temporary-preview-note">Имена ПЛК по умолчанию соответствуют AI/AO; FCS и исходный шкаф показаны для проверки. DI/DO отображаются на панели без отдельных дочерних кадров, как в образце. Свободные каналы получают резервные имена, резервированные подключения сохраняются. Объекты сигналов и библиотечные элементы панели должны существовать в целевом проекте.</p>
+          </section>
+
+          <details class="temporary-context">
+            <summary>Параметры целевого проекта SCADA</summary>
+            <p id="temporary-profile-description">Значения из экспортированного примера. Измените их, если импортируете в другой проект.</p>
+            <p id="temporary-context-note">Ниже — служебные параметры XML, а не физические ID модулей. Названия POU и теги сохраняются, FCS указан в имени каждого файла.</p>
+            <div class="temporary-context-grid">
+              <label class="temporary-field"><span>Проект</span><input data-temporary-context="project" type="text" maxlength="200" required></label>
+              <label class="temporary-field"><span>Тип контроллера</span><input data-temporary-context="controllerTypeName" type="text" maxlength="200" required></label>
+              <label class="temporary-field"><span>ID контроллера</span><input data-temporary-context="controllerId" type="text" maxlength="200" required></label>
+              <label class="temporary-field"><span>ID ресурса</span><input data-temporary-context="resourceId" type="text" maxlength="200" required></label>
+              <label class="temporary-field"><span>Версия</span><input data-temporary-context="version" type="text" maxlength="80" required></label>
+              <label class="temporary-field"><span>GroupID</span><input data-temporary-context="groupId" type="number" min="0" max="2147483647" step="1" required></label>
+              <label class="temporary-field"><span>Первый POUNum</span><input data-temporary-context="pouNumber" type="number" min="0" max="2147483647" step="1" required></label>
+              <label id="temporary-diagnostic-resource-field" class="temporary-field" hidden><span>Номер ресурса в пути привязки · не ID</span><input id="temporary-diagnostic-resource" type="number" min="1" max="2147483647" step="1" value="1" required disabled></label>
+            </div>
+          </details>
+        </form>
+
+        <div id="temporary-status" class="temporary-status" role="status">Выберите TXT-файл для предварительного просмотра.</div>
+        <div id="temporary-errors" class="temporary-notice temporary-errors" role="alert" hidden></div>
+        <div id="temporary-warnings" class="temporary-notice temporary-warnings" hidden></div>
+
+        <section id="temporary-preview" class="temporary-preview" aria-label="Распределение сигналов" hidden>
+          <div class="temporary-preview-toolbar">
+            <strong id="temporary-summary"></strong>
+            <label class="temporary-field temporary-search-field" for="temporary-search">
+              <span class="visually-hidden">Поиск по тегу, POU, кадру, ПЛК или модулю</span>
+              <input id="temporary-search" type="search" placeholder="Тег, POU, кадр или модуль" autocomplete="off">
+            </label>
+          </div>
+          <p id="temporary-preview-note" class="temporary-preview-note">В каждом модуле 4 канала. Свободные каналы получают резерв. Повторное размещение тега остаётся пустым — без блока и без заглушки; остальные позиции не сдвигаются.</p>
+          <div class="temporary-table-scroll" tabindex="0" aria-label="Таблица каналов">
+            <table class="temporary-table">
+              <thead><tr><th id="temporary-group-heading" scope="col">POU / FCS</th><th scope="col">Модуль</th><th scope="col">Канал</th><th scope="col">Тег</th><th id="temporary-scale-heading" scope="col">Шкала</th><th id="temporary-source-heading" scope="col">Строка TXT</th><th scope="col">Назначение</th></tr></thead>
+              <tbody id="temporary-rows"></tbody>
+            </table>
+          </div>
+          <p id="temporary-search-empty" class="temporary-status" hidden>По этому запросу каналы не найдены.</p>
+        </section>
+
+        <section id="temporary-result" class="temporary-result" aria-label="Готовые файлы по FCS" hidden>
+          <div><strong id="temporary-result-name"></strong><p id="temporary-result-summary"></p></div>
+          <ul id="temporary-downloads" class="temporary-downloads" aria-label="XML-файлы для импорта"></ul>
+        </section>
+      </article>
+    </section>
   </div>
 
   <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
@@ -394,5 +506,6 @@
 
   <noscript><div class="noscript-message">Для работы интерфейса необходимо включить JavaScript.</div></noscript>
   <script src="app.js" defer></script>
+  <script src="temporary.js" defer></script>
 </body>
 </html>

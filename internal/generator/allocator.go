@@ -14,6 +14,7 @@ type allocatorState struct {
 	NextT11  int64 `json:"nextT11"`
 	NextCard int64 `json:"nextCard"`
 	NextPOU  int64 `json:"nextPou"`
+	NextPage int64 `json:"nextPage"`
 }
 
 type Allocator struct {
@@ -33,7 +34,12 @@ type ReservationOptions struct {
 }
 
 func NewAllocator(path string, defaults config.IDDefaults) (*Allocator, error) {
-	allocator := &Allocator{path: path, state: allocatorState{NextT11: defaults.NextT11, NextCard: defaults.NextCard, NextPOU: defaults.NextPOU}}
+	if defaults.NextPage == 0 {
+		defaults.NextPage = config.Default().IDs.NextPage
+	}
+	// Unmarshalling a legacy state without nextPage preserves this new default;
+	// existing T11/card/POU cursors are never reset during migration.
+	allocator := &Allocator{path: path, state: allocatorState{NextT11: defaults.NextT11, NextCard: defaults.NextCard, NextPOU: defaults.NextPOU, NextPage: defaults.NextPage}}
 	data, err := os.ReadFile(path)
 	if err == nil {
 		if err := json.Unmarshal(data, &allocator.state); err != nil {
@@ -43,7 +49,7 @@ func NewAllocator(path string, defaults config.IDDefaults) (*Allocator, error) {
 		return nil, fmt.Errorf("прочитать state.json: %w", err)
 	}
 	if allocator.state.NextT11 < 1 || allocator.state.NextCard < 1 || allocator.state.NextPOU < 1 ||
-		allocator.state.NextT11 > maxTransportID+1 || allocator.state.NextCard > maxTransportID+1 || allocator.state.NextPOU > maxTransportID+1 {
+		allocator.state.NextPage < 1 || allocator.state.NextT11 > maxTransportID+1 || allocator.state.NextCard > maxTransportID+1 || allocator.state.NextPOU > maxTransportID+1 || allocator.state.NextPage > maxTransportID+1 {
 		return nil, fmt.Errorf("state.json содержит ID вне диапазона 1..%d", maxTransportID+1)
 	}
 	return allocator, nil
@@ -120,6 +126,39 @@ func (a *Allocator) WithReservation(t11Count, cardCount, pouCount int, options R
 	}
 	if err := a.persist(next); err != nil {
 		return IDRange{}, &AllocatorPersistenceError{Err: err}
+	}
+	a.state = next
+	return result, nil
+}
+
+// WithDiagnosticReservation shares primitive/card cursors with other exports,
+// but advances only the dedicated page cursor, leaving every POU ID untouched.
+// Preparation, validation and serialization all run before state is committed.
+func (a *Allocator) WithDiagnosticReservation(t11Count, cardCount, pageCount int, consume func(DiagnosticIDRange) error) (DiagnosticIDRange, error) {
+	if t11Count < 0 || cardCount < 0 || pageCount < 1 {
+		return DiagnosticIDRange{}, fmt.Errorf("число примитивов и карточек должно быть неотрицательным, число кадров — положительным")
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	result := DiagnosticIDRange{T11Start: a.state.NextT11, CardStart: a.state.NextCard, PageStart: a.state.NextPage}
+	next := a.state
+	var err error
+	if next.NextT11, err = addTransportCount(result.T11Start, t11Count, "SourceT11ID"); err != nil {
+		return DiagnosticIDRange{}, err
+	}
+	if next.NextCard, err = addTransportCount(result.CardStart, cardCount, "CardID"); err != nil {
+		return DiagnosticIDRange{}, err
+	}
+	if next.NextPage, err = addTransportCount(result.PageStart, pageCount, "PageID"); err != nil {
+		return DiagnosticIDRange{}, err
+	}
+	if consume != nil {
+		if err := consume(result); err != nil {
+			return DiagnosticIDRange{}, err
+		}
+	}
+	if err := a.persist(next); err != nil {
+		return DiagnosticIDRange{}, &AllocatorPersistenceError{Err: err}
 	}
 	a.state = next
 	return result, nil
