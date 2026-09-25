@@ -93,7 +93,7 @@ func validatePLCReferences(doc plcDiagnosticDocument) error {
 			if !register(primitive.T11ID) {
 				return fail("повторный/неверный SourceT11ID")
 			}
-			if primitive.ObjectType == "8" && (!symbols[primitive.ObjectMSID] || primitive.CardID != "0" && !cards[primitive.CardID]) {
+			if primitive.ObjectType == "8" && (!symbols[primitive.ObjectMSID] || !cards[primitive.CardID]) {
 				return fail("неразрешённые ObjMSID/CardID")
 			}
 			if primitive.ObjectType == "5" && !pics[primitive.PicID] {

@@ -42,6 +42,8 @@ type Channel struct {
 	Redundant     bool   `json:"redundant"`
 	SourceRow     int    `json:"sourceRow"`
 	SourceTag     string `json:"sourceTag"`
+	Description   string `json:"description,omitempty"`
+	PeerModule    string `json:"peerModule,omitempty"`
 	BindingSource string `json:"bindingSource"`
 }
 

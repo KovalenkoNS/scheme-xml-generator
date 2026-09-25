@@ -1778,6 +1778,7 @@
     for (const file of state.outputs) {
       const node = elements.outputItemTemplate.content.firstElementChild.cloneNode(true);
       const name = safeText(file.name, "result.xml");
+      node.querySelector(".output-file-icon").textContent = /\.xls$/i.test(name) ? "XLS" : "XML";
       node.querySelector(".output-name").textContent = name;
       node.querySelector(".output-meta").textContent = [formatBytes(file.size), formatDate(file.createdAt)].filter(Boolean).join(" · ");
       const link = node.querySelector(".button-download");

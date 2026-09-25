@@ -74,6 +74,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/temporary/ao/generate-diagnostic", s.localPOST(s.handleAODiagnosticGenerate))
 	s.mux.HandleFunc("POST /api/temporary/diagnostic/preview", s.localPOST(s.handlePLCDiagnosticPreview))
 	s.mux.HandleFunc("POST /api/temporary/diagnostic/generate", s.localPOST(s.handlePLCDiagnosticGenerate))
+	s.mux.HandleFunc("POST /api/techobjects/preview", s.localPOST(s.handleTechObjectsPreview))
+	s.mux.HandleFunc("POST /api/techobjects/generate", s.localPOST(s.handleTechObjectsGenerate))
+	s.mux.HandleFunc("GET /api/skz/profile", s.handleSKZProfile)
+	s.mux.HandleFunc("POST /api/skz/preview", s.localPOST(s.handleSKZPreview))
+	s.mux.HandleFunc("POST /api/skz/generate", s.localPOST(s.handleSKZGenerate))
 	s.mux.HandleFunc("GET /api/outputs", s.handleOutputs)
 	s.mux.HandleFunc("GET /api/output/{name}", s.handleDownload)
 	s.mux.Handle("GET /", http.FileServer(http.FS(s.staticFS)))
@@ -320,7 +325,7 @@ func (s *Server) handleOutputs(w http.ResponseWriter, _ *http.Request) {
 	}
 	files := make([]outputFile, 0)
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".xml") {
+		if entry.IsDir() || !supportedOutputFile(entry.Name()) {
 			continue
 		}
 		info, err := entry.Info()
@@ -335,7 +340,7 @@ func (s *Server) handleOutputs(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 	name, err := url.PathUnescape(r.PathValue("name"))
-	if err != nil || filepath.Base(name) != name || !strings.EqualFold(filepath.Ext(name), ".xml") {
+	if err != nil || filepath.Base(name) != name || !supportedOutputFile(name) {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("недопустимое имя файла"))
 		return
 	}
@@ -350,9 +355,18 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer file.Close()
-	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	if strings.EqualFold(filepath.Ext(name), ".xls") {
+		w.Header().Set("Content-Type", "application/vnd.ms-excel")
+	} else {
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	}
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
 	_, _ = io.Copy(w, file)
+}
+
+func supportedOutputFile(name string) bool {
+	extension := filepath.Ext(name)
+	return strings.EqualFold(extension, ".xml") || strings.EqualFold(extension, ".xls")
 }
 
 func (s *Server) localPOST(next http.HandlerFunc) http.HandlerFunc {

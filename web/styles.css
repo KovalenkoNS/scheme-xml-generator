@@ -2325,6 +2325,8 @@ h3 {
 /* Workspace tabs and isolated TXT import tool. */
 .workspace-tabs {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   align-self: stretch;
   align-items: center;
   gap: 4px;
@@ -2530,6 +2532,12 @@ h3 {
 .temporary-diagnostic-plc > .temporary-field { margin: 0 0 5px 20px; }
 .temporary-diagnostic-plc > .temporary-field input { height: 28px; padding: 4px 7px; font-size: 11px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
 .temporary-diagnostic-types { margin: 0 0 5px 20px; font-size: 10px; color: var(--ink-soft); }
+.techobjects-plc > .temporary-field { margin: 6px 0; }
+.techobjects-source, .techobjects-counts { margin: 5px 0; color: var(--ink-soft); font-size: 11px; overflow-wrap: anywhere; }
+.techobjects-plc .temporary-field input { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+.techobjects-resource-setting { display: flex; align-items: end; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.techobjects-resource-setting > .temporary-field { width: 180px; }
+.techobjects-resource-setting > p { margin: 0 0 6px; }
 .temporary-diagnostic-frames > div > strong { display: block; margin-top: 6px; }
 .temporary-diagnostic-frames > div > p { margin: 3px 0 6px; overflow-wrap: anywhere; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; line-height: 1.5; }
 

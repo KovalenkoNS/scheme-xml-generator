@@ -30,3 +30,11 @@
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Project documentation must be versioned (owner requirement, TASK-0003).
+!/docs/
+!/docs/**
+!/AGENTS.md
+!/README.md
+!/TEMPLATE_INTERPRETATION_SEMANTICS.md
+!/DIAGNOSTIC_IO_SEMANTICS.md

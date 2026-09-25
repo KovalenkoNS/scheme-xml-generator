@@ -2,3 +2,6 @@
 # do not interpret vendor whitespace/control bytes as source-code changes.
 "XML dev/**" -text -diff
 "XML dev/*.md" -text diff
+
+# Native SKZ FBD export used by generator tests follows the same byte policy.
+internal/generator/testdata/*.xml -text -diff

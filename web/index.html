@@ -30,6 +30,8 @@
       <nav class="workspace-tabs" role="tablist" aria-label="Раздел приложения">
         <button id="scheme-tab" class="workspace-tab" type="button" role="tab" aria-selected="true" aria-controls="main-content">Генератор схем</button>
         <button id="temporary-tab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="temporary-content" tabindex="-1">Временные решения</button>
+        <button id="techobjects-tab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="techobjects-content" tabindex="-1">Технологические объекты</button>
+        <button id="skz-tab" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="skz-content" tabindex="-1">СКЗ · PLC 850</button>
       </nav>
 
       <div class="topbar-actions">
@@ -164,7 +166,7 @@
           <div class="card-heading output-heading">
             <div>
               <p class="eyebrow">Результаты</p>
-              <h2 id="outputs-title">Готовые XML-файлы</h2>
+              <h2 id="outputs-title">Готовые файлы</h2>
             </div>
             <button id="reload-outputs" class="icon-button" type="button" aria-label="Обновить список файлов" title="Обновить список файлов">
               <span class="button-spinner" aria-hidden="true"></span>
@@ -176,7 +178,7 @@
           </div>
           <div id="output-empty" class="empty-state output-empty" hidden>
             <strong>Пока нет созданных файлов</strong>
-            <p>После генерации общий XML появится здесь.</p>
+            <p>После генерации файлы XML и XLS появятся здесь.</p>
           </div>
         </article>
       </section>
@@ -286,6 +288,121 @@
           <div><strong id="temporary-result-name"></strong><p id="temporary-result-summary"></p></div>
           <ul id="temporary-downloads" class="temporary-downloads" aria-label="XML-файлы для импорта"></ul>
         </section>
+      </article>
+    </section>
+
+    <section id="techobjects-content" class="temporary-workspace" role="tabpanel" aria-labelledby="techobjects-tab" tabindex="0" hidden>
+      <article class="temporary-tool" aria-labelledby="techobjects-title">
+        <div class="temporary-heading">
+          <div>
+            <p class="eyebrow">Технологические объекты · SCADA</p>
+            <h1 id="techobjects-title">Модули и резервы → XLS</h1>
+          </div>
+          <span class="temporary-profile-badge">AI · AO · DI · DO</span>
+        </div>
+        <p class="temporary-description">Загрузите исходную книгу Excel IO и выберите ПЛК. Для каждого ПЛК создаётся отдельный XLS: объекты диагностики модулей AI, AO, DI, DO и резервные объекты свободных каналов AI/AO находятся в одном файле. Свободные каналы DI/DO учитываются внутри объектов модулей D32V.</p>
+
+        <form id="techobjects-form" novalidate>
+          <div class="temporary-toolbar">
+            <label class="temporary-field temporary-file-field" for="techobjects-file">
+              <span>Исходная книга Excel IO · XLSX, до 16 МБ</span>
+              <input id="techobjects-file" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+            </label>
+            <label class="temporary-field" for="techobjects-filename">
+              <span>Базовое имя файлов · имя ПЛК добавится автоматически</span>
+              <input id="techobjects-filename" type="text" maxlength="180" value="TechObjects" spellcheck="false" autocomplete="off" required>
+            </label>
+            <button id="techobjects-generate" class="button button-primary" type="submit" disabled>
+              <span class="button-spinner" aria-hidden="true"></span>
+              <span>Создать XLS</span>
+            </button>
+          </div>
+          <div class="techobjects-resource-setting">
+            <label class="temporary-field" for="techobjects-resource">
+              <span>Номер ресурса ПЛК</span>
+              <input id="techobjects-resource" type="number" min="1" max="2147483647" step="1" value="1" required>
+            </label>
+            <p class="temporary-preview-note">Ресурс для привязки технологических объектов в выбранных ПЛК.</p>
+          </div>
+
+          <section id="techobjects-preview" class="temporary-st-settings" aria-label="Технологические объекты по ПЛК" aria-busy="false" hidden>
+            <p id="techobjects-summary" class="temporary-preview-note"></p>
+            <div class="temporary-st-selection-toolbar">
+              <button id="techobjects-select-all" class="button button-secondary button-small" type="button" disabled>Выбрать всё</button>
+              <button id="techobjects-clear-selection" class="button button-secondary button-small" type="button" disabled>Снять выбор</button>
+              <span id="techobjects-selection-summary" role="status">ПЛК не выбраны</span>
+            </div>
+            <div id="techobjects-plcs" class="temporary-st-pous"></div>
+            <p id="techobjects-selection-empty" class="temporary-status">Выберите хотя бы один ПЛК для создания XLS.</p>
+            <p class="temporary-preview-note">Имя ПЛК входит в имена объектов и выходного файла. Разрешены латинские буквы, цифры и подчёркивания.</p>
+          </section>
+        </form>
+
+        <div id="techobjects-status" class="temporary-status" role="status">Выберите исходную книгу Excel IO (.xlsx) для предварительного просмотра.</div>
+        <div id="techobjects-errors" class="temporary-notice temporary-errors" role="alert" hidden></div>
+        <div id="techobjects-warnings" class="temporary-notice temporary-warnings" hidden></div>
+
+        <section id="techobjects-result" class="temporary-result" aria-label="Готовые XLS по ПЛК" hidden>
+          <div><strong id="techobjects-result-name"></strong><p id="techobjects-result-summary"></p></div>
+          <ul id="techobjects-downloads" class="temporary-downloads" aria-label="XLS-файлы технологических объектов"></ul>
+        </section>
+      </article>
+    </section>
+
+    <section id="skz-content" class="temporary-workspace" role="tabpanel" aria-labelledby="skz-tab" tabindex="0" hidden>
+      <article class="temporary-tool" aria-labelledby="skz-title">
+        <div class="temporary-heading">
+          <div><p class="eyebrow">СКЗ · PLC 850</p><h1 id="skz-title">AI и DO → XML</h1></div>
+          <span class="temporary-profile-badge">AI16H · AD3_v2 / DO32P · D32V</span>
+        </div>
+        <p class="temporary-description">Загрузите карту AI или DO в формате XLSX и выберите нужные группы модулей. ST создаёт физические привязки каналов. В AI FBD каждый модуль получает отдельную POU с фрагментами AD3_v2 и привязкой к тегам из карты. DO FBD подключает сигналы ко входам D32V. Для каждого ПЛК СКЗ создаётся отдельный XML.</p>
+        <form id="skz-form" novalidate>
+          <div class="temporary-mode-bar">
+            <label class="temporary-field" for="skz-mode"><span>Режим генерации</span><select id="skz-mode"><option value="st">ST · физические каналы</option><option value="fbd">FBD · объекты и привязки</option></select></label>
+            <p id="skz-mode-note" class="temporary-preview-note">Укажите реальные ModuleID физических модулей. Обозначение A1-00 в карте не задаёт ModuleID.</p>
+          </div>
+          <div class="temporary-toolbar">
+            <label class="temporary-field temporary-file-field" for="skz-file"><span>Карта AI или DO · XLSX, до 16 МБ</span><input id="skz-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+            <label class="temporary-field" for="skz-filename"><span>Базовое имя файлов · ПЛК добавится автоматически</span><input id="skz-filename" type="text" maxlength="180" value="SKZ_import" spellcheck="false" autocomplete="off" required></label>
+            <button id="skz-generate" class="button button-primary" type="submit" disabled><span class="button-spinner" aria-hidden="true"></span><span>Создать XML</span></button>
+          </div>
+          <section id="skz-selection" class="temporary-st-settings" aria-label="Группы модулей СКЗ" hidden>
+            <p id="skz-summary" class="temporary-preview-note"></p>
+            <div class="temporary-st-selection-toolbar">
+              <button id="skz-select-all" class="button button-secondary button-small" type="button" disabled>Выбрать всё</button>
+              <button id="skz-clear-selection" class="button button-secondary button-small" type="button" disabled>Снять выбор</button>
+              <span id="skz-selection-summary" role="status">Группы модулей не выбраны</span>
+            </div>
+            <div id="skz-groups" class="temporary-st-pous"></div>
+            <p class="temporary-preview-note">Количество модулей общее для ST и FBD. В AI FBD один модуль — одна POU: AI_A1_00, AI_A1_01 и далее. Модули из XLSX сохраняют исходные каналы; дополнительные модули получают 16 резервных AI или 32 резервных позиции внутри D32V для DO. Для ST укажите реальные ModuleID добавленных модулей. За одну генерацию — до 128 POU, 4096 модулей и 4096 каналов.</p>
+          </section>
+          <p id="skz-settings-status" class="temporary-status" role="status">Загрузите карту для выбора групп модулей.</p>
+          <details id="skz-context" class="temporary-context">
+            <summary>Параметры целевого проекта SCADA</summary>
+            <p id="skz-profile-description">Загружаю профиль PLC 850…</p>
+            <p>Служебные параметры XML берутся из примера PLC 850. Физические ModuleID для ST задаются отдельно в выбранных группах модулей.</p>
+            <p>Для совместного импорта ST и FBD укажите свободные, непересекающиеся диапазоны POUNum.</p>
+            <div class="temporary-context-grid">
+              <label class="temporary-field"><span>Проект · необязательно</span><input data-skz-context="project" type="text" maxlength="200" disabled></label>
+              <label class="temporary-field"><span>Тип контроллера</span><input data-skz-context="controllerTypeName" type="text" value="TENIX-CPU850" maxlength="200" readonly required disabled></label>
+              <label class="temporary-field"><span>ID контроллера</span><input data-skz-context="controllerId" type="number" min="0" max="2147483647" step="1" required disabled></label>
+              <label class="temporary-field"><span>ID ресурса</span><input data-skz-context="resourceId" type="number" min="0" max="2147483647" step="1" required disabled></label>
+              <label class="temporary-field"><span>Версия</span><input data-skz-context="version" type="number" min="0" max="2147483647" step="1" required disabled></label>
+              <label class="temporary-field"><span>GroupID</span><input data-skz-context="groupId" type="number" min="0" max="2147483647" step="1" required disabled></label>
+              <label class="temporary-field"><span>Первый POUNum</span><input data-skz-context="pouNumber" type="number" min="0" max="2147483647" step="1" required disabled></label>
+            </div>
+          </details>
+        </form>
+        <div id="skz-status" class="temporary-status" role="status">Выберите карту AI или DO (.xlsx) для предварительного просмотра.</div>
+        <div id="skz-errors" class="temporary-notice temporary-errors" role="alert" hidden></div>
+        <button id="skz-retry-profile" class="button button-secondary button-small" type="button" hidden>Повторить загрузку профиля PLC 850</button>
+        <div id="skz-warnings" class="temporary-notice temporary-warnings" hidden></div>
+        <section id="skz-preview" class="temporary-preview" aria-label="Каналы выбранных модулей СКЗ" aria-busy="false" hidden>
+          <div class="temporary-preview-toolbar"><strong>Каналы выбранных модулей</strong><label class="temporary-field temporary-search-field" for="skz-search"><span class="visually-hidden">Поиск по ПЛК, POU, модулю или тегу</span><input id="skz-search" type="search" placeholder="ПЛК, POU, модуль или тег" autocomplete="off"></label></div>
+          <div class="temporary-table-scroll" tabindex="0" aria-label="Каналы AI и DO"><table class="temporary-table"><thead><tr><th scope="col">POU / ПЛК</th><th scope="col">Модуль</th><th scope="col">Канал</th><th scope="col">Тег / резервная привязка</th><th scope="col">Тип объекта</th><th scope="col">Строка XLSX</th><th scope="col">Назначение</th></tr></thead><tbody id="skz-rows"></tbody></table></div>
+          <p id="skz-search-empty" class="temporary-status">Выберите группы модулей для просмотра каналов.</p>
+        </section>
+        <section id="skz-result" class="temporary-result" aria-label="XML СКЗ по ПЛК" hidden><div><strong id="skz-result-name"></strong><p id="skz-result-summary"></p></div><ul id="skz-downloads" class="temporary-downloads" aria-label="XML-файлы СКЗ"></ul></section>
       </article>
     </section>
   </div>
@@ -507,5 +624,7 @@
   <noscript><div class="noscript-message">Для работы интерфейса необходимо включить JavaScript.</div></noscript>
   <script src="app.js" defer></script>
   <script src="temporary.js" defer></script>
+  <script src="techobjects.js" defer></script>
+  <script src="skz.js" defer></script>
 </body>
 </html>

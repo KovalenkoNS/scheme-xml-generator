@@ -294,7 +294,10 @@ func readMappingUpload(w http.ResponseWriter, r *http.Request, limit int64, form
 }
 
 func decodeAOMappingContext(raw string) (generator.AOMappingContext, error) {
-	result := generator.DefaultAOMappingContext()
+	return decodeMappingContextWithDefault(raw, generator.DefaultAOMappingContext())
+}
+
+func decodeMappingContextWithDefault(raw string, result generator.AOMappingContext) (generator.AOMappingContext, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return result, nil

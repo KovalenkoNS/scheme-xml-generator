@@ -99,7 +99,7 @@ func TestPLCDiagnosticHierarchyAndNativeProfile(t *testing.T) {
 		}
 	}
 	ao := front.Children.Pages[1]
-	if ao.Name != "AO_B01_A10_03_AOC4H" || ao.Height != "152" || ao.DParams != "66" || ao.FrameNumber != "5" || ao.PageLayers[0].Primitives[0].CardID != "0" {
+	if ao.Name != "AO_B01_A10_03_AOC4H" || ao.Height != "152" || ao.DParams != "66" || ao.FrameNumber != "5" {
 		t.Fatal("wrong AO profile")
 	}
 	if ao.PageLayers[0].Primitives[1].CardID != front.Children.Pages[2].PageLayers[0].Primitives[1].CardID {
@@ -126,6 +126,78 @@ func TestPLCDiagnosticHierarchyAndNativeProfile(t *testing.T) {
 	}
 	if len(result.Warnings) < 2 {
 		t.Fatal("missing external dependency and CPU convention warnings")
+	}
+}
+
+func TestPLCDiagnosticFrameHeadersBindModuleDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		fcs      string
+		resource string
+	}{
+		{"original controller", "3000_D_SC_B01", "1"},
+		{"renamed controller and resource", "3000_D_SC_B07_2", "2"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := DefaultAODiagnosticContext()
+			ctx.ResourceNumber = tc.resource
+			plans, err := PreparePLCDiagnosticPlans(plcDiagnosticTestSource(), []iomap.Selection{{Key: "B01:cabinet", Name: tc.fcs}}, ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc plcDiagnosticDocument
+			if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, utf8BOM), &doc); err != nil {
+				t.Fatal(err)
+			}
+			cards := map[string]string{}
+			for _, card := range doc.Cards {
+				cards[card.ID] = card.Info
+			}
+			// Both redundant AO modules need their own diagnostic binding,
+			// even though their first channel shares the same signal card.
+			expected := map[string]string{
+				"A10_02_AI16H": "3654",
+				"A10_03_AOC4H": "3655",
+				"A10_04_AOC4H": "3655",
+				"A12_00_AI16H": "3654",
+			}
+			for _, panel := range doc.Pages[0].Children.Pages {
+				moduleCards := map[string]string{}
+				for _, p := range panel.PageLayers[0].Primitives {
+					if p.ObjectMSID == "3625" || p.ObjectMSID == "3634" {
+						if p.Receptors == nil || len(p.Receptors.Items) != 1 {
+							t.Fatal("module has no child-frame link")
+						}
+						moduleCards[p.Receptors.Items[0].Int] = p.CardID
+					}
+				}
+				for _, frame := range panel.Children.Pages {
+					module := strings.TrimPrefix(frame.Name, "AI_")
+					module = strings.TrimPrefix(module, "AO_")
+					module = strings.TrimPrefix(module, strings.TrimPrefix(tc.fcs, "3000_D_SC_")+"_")
+					ms, exists := expected[module]
+					if !exists {
+						t.Fatalf("unexpected or repeated module frame %s", frame.Name)
+					}
+					delete(expected, module)
+					header := frame.PageLayers[0].Primitives[0]
+					if header.ObjectMSID != ms || header.CardID == "0" || header.CardID != moduleCards[frame.ID] {
+						t.Fatalf("%s header: symbol=%s card=%s, want symbol=%s module card=%s", frame.Name, header.ObjectMSID, header.CardID, ms, moduleCards[frame.ID])
+					}
+					want := "2/" + tc.fcs + "/" + tc.resource + "/_" + tc.fcs + "_" + module + "/(AI_DIAG16_AD3v1_kvit)"
+					if cards[header.CardID] != want {
+						t.Fatalf("%s header binding = %q, want %q", frame.Name, cards[header.CardID], want)
+					}
+				}
+			}
+			if len(expected) != 0 {
+				t.Fatalf("missing module frames: %v", expected)
+			}
+		})
 	}
 }
 
@@ -188,6 +260,11 @@ func TestPLCDiagnosticRejectsInvalidPlans(t *testing.T) {
 
 func TestPLCDiagnosticReferenceValidationRejectsBrokenEdges(t *testing.T) {
 	_, _, doc := buildPLCDiagnosticTest(t)
+	doc.Pages[0].Children.Pages[1].Children.Pages[1].PageLayers[0].Primitives[0].CardID = "0"
+	if err := validatePLCReferences(doc); err == nil {
+		t.Fatal("accepted unbound AO diagnostic header")
+	}
+	_, _, doc = buildPLCDiagnosticTest(t)
 	front := &doc.Pages[0].Children.Pages[1]
 	for i := range front.PageLayers[0].Primitives {
 		p := &front.PageLayers[0].Primitives[i]

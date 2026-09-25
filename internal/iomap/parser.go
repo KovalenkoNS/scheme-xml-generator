@@ -23,6 +23,17 @@ func Parse(data []byte) (*Plan, error) {
 	return ParseSheets(sheets)
 }
 
+// ParseInventory reads physical placement and occupied/free channels without
+// resolving technological signal names. Creating modules and spare objects
+// does not depend on the naming rules used by panel XML generation.
+func ParseInventory(data []byte) (*Plan, error) {
+	sheets, err := ReadWorkbook(data)
+	if err != nil {
+		return nil, err
+	}
+	return parseSheets(sheets, true)
+}
+
 func headerKey(value string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(value), "\n")
 	line = strings.ToLower(line)
@@ -70,6 +81,10 @@ func discoverHeaders(row Row) map[string]string {
 			logical = "explicit"
 		case key == "scadareservetag" || key == "scadareserve":
 			logical = "explicitReserve"
+		case key == "service":
+			logical = "service"
+		case key == "description" || key == "signaldescription" || strings.EqualFold(strings.TrimSpace(value), "Назначение"):
+			logical = "description"
 		}
 		if logical != "" {
 			if previous := result[logical]; previous != "" {
@@ -108,6 +123,10 @@ func normalizeName(value string) string {
 }
 
 func ParseSheets(sheets []Sheet) (*Plan, error) {
+	return parseSheets(sheets, false)
+}
+
+func parseSheets(sheets []Sheet, inventoryOnly bool) (*Plan, error) {
 	var source *Sheet
 	var header map[string]string
 	var headerNumber int
@@ -148,6 +167,10 @@ func ParseSheets(sheets []Sheet) (*Plan, error) {
 			continue
 		}
 		get := func(key string) string { return strings.TrimSpace(row.Cells[header[key]]) }
+		description := get("description")
+		if empty(description) || strings.EqualFold(description, "Н/Д") || strings.EqualFold(description, "N/A") {
+			description = get("service")
+		}
 		if empty(get("main")) && empty(get("type")) && empty(get("cabinet")) {
 			skipped++
 			continue
@@ -234,7 +257,7 @@ func ParseSheets(sheets []Sheet) (*Plan, error) {
 			reserve := empty(sr.TagNo) && !hasExplicit
 			if reserve {
 				tag = reserveTag(controller.Name, name, channel)
-			} else {
+			} else if !inventoryOnly {
 				tag, fromProfile, err = signalTag(sr, placement == 1)
 				if err != nil {
 					return nil, fmt.Errorf("IO, строка %d: %w", row.Number, err)
@@ -246,10 +269,16 @@ func ParseSheets(sheets []Sheet) (*Plan, error) {
 				}
 			}
 			objectType := map[string]string{"AI16H": "AD3_v2", "AOC4H": "AN_v1"}[sr.Type]
-			ch := Channel{Channel: channel, Tag: tag, ObjectType: objectType, Reserve: reserve, Redundant: placement == 1, SourceRow: row.Number, SourceTag: sr.TagNo}
+			peer := sr.Redundant
+			if placement == 1 {
+				peer = sr.Main
+			}
+			ch := Channel{Channel: channel, Tag: tag, ObjectType: objectType, Reserve: reserve, Redundant: placement == 1, SourceRow: row.Number, SourceTag: sr.TagNo, Description: description, PeerModule: peer}
 			switch {
 			case reserve:
 				ch.BindingSource = "reserve"
+			case inventoryOnly:
+				ch.BindingSource = "inventory"
 			case hasExplicit:
 				ch.BindingSource = "explicit"
 			case fromProfile:
@@ -286,7 +315,7 @@ func ParseSheets(sheets []Sheet) (*Plan, error) {
 			module := &controller.Modules[mi]
 			racks[module.Rack] = true
 			for c := range module.Channels {
-				if module.Channels[c].Tag == "" {
+				if module.Channels[c].SourceRow == 0 {
 					module.Channels[c] = Channel{Channel: c, Tag: reserveTag(controller.Name, module.Name, c), ObjectType: map[string]string{"AI16H": "AD3_v2", "AOC4H": "AN_v1"}[module.Type], Reserve: true, BindingSource: "reserve"}
 				}
 			}
@@ -320,7 +349,9 @@ func ParseSheets(sheets []Sheet) (*Plan, error) {
 		rows := corrections[key]
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf("Исправлена принадлежность по физическому шкафу и крейту (%s): %d строк, первая — %d. Исходный Excel не изменён.", key, len(rows), rows[0]))
 	}
-	plan.Warnings = append(plan.Warnings, "Размещение крейтов: A…0/A…1 — передняя панель, A…2 и далее — задняя. CPU715 в слотах 0/1 первого крейта — правило образца, отсутствующее в сигнальной карте IO.")
+	if !inventoryOnly {
+		plan.Warnings = append(plan.Warnings, "Размещение крейтов: A…0/A…1 — передняя панель, A…2 и далее — задняя. CPU715 в слотах 0/1 первого крейта — правило образца, отсутствующее в сигнальной карте IO.")
+	}
 	if profileCount > 0 {
 		plan.Warnings = append(plan.Warnings, fmt.Sprintf("Для %d аналоговых размещений сохранены уточнённые имена из проверенной перекладки AI/AO; профиль применяется только при совпадении исходных полей IO.", profileCount))
 	}

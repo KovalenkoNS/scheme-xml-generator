@@ -330,16 +330,17 @@ func buildPLCDiagnostic(plan PLCDiagnosticPlan, ctx AODiagnosticContext, ids Dia
 			p := b.symbol(95+63*module.Slot, 90+440*rack.Order, 63, h, ms, moduleCard)
 			if module.Type == "AI16H" || module.Type == "AOC4H" {
 				frameName := plcFrameName(plan.FCS, module)
-				frameHeight, bgMS, bgCard := 448, "3654", moduleCard
+				frameHeight, bgMS := 448, "3654"
 				if module.Type == "AOC4H" {
-					frameHeight, bgMS, bgCard = 152, "3655", "0"
+					frameHeight, bgMS = 152, "3655"
 				}
 				frame := b.page(frameName, rootPath+"\\"+panel.Name+"\\"+frameName, module.Name, 1200, frameHeight)
 				frame.PrintWidth, frame.PrintHeight = "600", "800"
 				if module.Type == "AOC4H" {
 					frame.DParams, frame.FrameNumber = "66", "5"
 				}
-				frame.PageLayers[0].Primitives = append(frame.PageLayers[0].Primitives, b.symbol(0, 0, 1200, frameHeight, bgMS, bgCard))
+				// AI and AO frame headers share the cabinet module's diagnostic object.
+				frame.PageLayers[0].Primitives = append(frame.PageLayers[0].Primitives, b.symbol(0, 0, 1200, frameHeight, bgMS, moduleCard))
 				for _, channel := range module.Channels {
 					y, rowMS := 54+24*channel.Channel, "3679"
 					if module.Type == "AI16H" {
