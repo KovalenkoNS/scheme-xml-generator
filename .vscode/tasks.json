@@ -1,0 +1,65 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "SDD: check",
+      "type": "process",
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/scripts/sdd.cjs",
+        "check"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SDD: new specification",
+      "type": "process",
+      "command": "node",
+      "args": [
+        "${workspaceFolder}/scripts/sdd.cjs",
+        "new",
+        "${input:sddSlug}",
+        "${input:sddTitle}"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "SDD: prerequisites",
+      "type": "process",
+      "command": "powershell",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}/.specify/scripts/powershell/check-prerequisites.ps1",
+        "-Json",
+        "-RequireSpec",
+        "-RequireTasks",
+        "-IncludeTasks"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "sddSlug",
+      "type": "promptString",
+      "description": "Spec Kit slug (lowercase Latin, digits, hyphens)"
+    },
+    {
+      "id": "sddTitle",
+      "type": "promptString",
+      "description": "Название изменения"
+    }
+  ]
+}

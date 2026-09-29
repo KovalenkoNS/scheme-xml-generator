@@ -28,7 +28,9 @@
 
 # Local editor and operating-system files
 .idea/
-.vscode/
+.vscode/*
+!.vscode/tasks.json
+!.vscode/extensions.json
 .DS_Store
 Thumbs.db
 Desktop.ini
