@@ -1,0 +1,10 @@
+/* Выбор контроллера и его аппаратной модели; не определяет область ПЛК. */
+.controller-row {
+  display:flex;
+  gap:16px;
+  max-width:590px;
+  margin:28px 0
+}
+.model {
+  width:130px
+}

@@ -5,6 +5,8 @@
 *.coverprofile
 /XmlSchemeGenerator
 /schemegen
+/.artifacts/
+/dist/
 
 # Local configuration and environment
 /config.json

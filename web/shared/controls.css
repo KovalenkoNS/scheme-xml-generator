@@ -1,0 +1,209 @@
+/* Общие кнопки, поля, фокус, состояния ввода и основание диалогов всех компонентов. */
+button {
+  font:inherit
+}
+input {
+  font:inherit
+}
+select {
+  font:inherit
+}
+button {
+  outline-offset:4px
+}
+a {
+  outline-offset:4px
+}
+input {
+  outline-offset:4px
+}
+select {
+  outline-offset:4px
+}
+summary {
+  outline-offset:4px
+}
+button:focus-visible {
+  outline:2px solid var(--blue)
+}
+a:focus-visible {
+  outline:2px solid var(--blue)
+}
+input:focus-visible {
+  outline:2px solid var(--blue)
+}
+select:focus-visible {
+  outline:2px solid var(--blue)
+}
+summary:focus-visible {
+  outline:2px solid var(--blue)
+}
+button {
+  cursor:pointer;
+  border:1px solid #cdd6de;
+  border-radius:7px;
+  padding:10px 15px;
+  background:white;
+  color:inherit;
+  font-weight:600;
+  white-space:nowrap
+}
+.button {
+  cursor:pointer;
+  border:1px solid #cdd6de;
+  border-radius:7px;
+  padding:10px 15px;
+  background:white;
+  color:inherit;
+  font-weight:600;
+  white-space:nowrap
+}
+button:hover {
+  background:#f3f6fa;
+  border-color:#aebdca
+}
+.button:hover {
+  background:#f3f6fa;
+  border-color:#aebdca
+}
+button:disabled {
+  cursor:default;
+  opacity:.5
+}
+.quiet {
+  background:transparent;
+  border-color:transparent;
+  color:var(--muted)
+}
+.primary {
+  background:var(--blue);
+  border-color:var(--blue);
+  color:white;
+  min-height:44px
+}
+.primary:hover {
+  background:#164bac;
+  border-color:#164bac
+}
+.primary span {
+  margin-left:22px
+}
+.icon-button {
+  padding:2px 9px;
+  font-size:25px;
+  border:0;
+  background:transparent;
+  color:var(--muted)
+}
+[hidden] {
+  display:none!important
+}
+.button {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  position:relative
+}
+.button input[type=file] {
+  position:absolute;
+  width:1px;
+  height:1px;
+  opacity:0;
+  overflow:hidden
+}
+.button:focus-within {
+  outline:2px solid var(--blue);
+  outline-offset:4px
+}
+.field {
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  font-size:12px;
+  color:var(--muted);
+  min-width:0
+}
+.field input {
+  background:white;
+  color:#263846;
+  border:1px solid #ccd6de;
+  border-radius:6px;
+  height:40px;
+  padding:8px 11px;
+  width:100%;
+  min-width:0
+}
+.field select {
+  background:white;
+  color:#263846;
+  border:1px solid #ccd6de;
+  border-radius:6px;
+  height:40px;
+  padding:8px 11px;
+  width:100%;
+  min-width:0
+}
+select {
+  background:white;
+  color:#263846;
+  border:1px solid #ccd6de;
+  border-radius:6px;
+  height:40px;
+  padding:8px 11px;
+  width:100%;
+  min-width:0
+}
+input[type=search] {
+  background:white;
+  color:#263846;
+  border:1px solid #ccd6de;
+  border-radius:6px;
+  height:40px;
+  padding:8px 11px;
+  width:100%;
+  min-width:0
+}
+.field input:disabled {
+  background:#eef1f4;
+  color:#84919c
+}
+.field select:disabled {
+  background:#eef1f4;
+  color:#84919c
+}
+.grow {
+  flex:1
+}
+input[type=checkbox] {
+  accent-color:var(--blue);
+  width:16px;
+  height:16px;
+  flex-shrink:0
+}
+.check-label {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:var(--muted);
+  font-size:12px
+}
+dialog {
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:27px 30px;
+  width:min(760px,calc(100vw - 30px));
+  max-height:85vh;
+  color:inherit;
+  box-shadow:0 24px 95px #14294030
+}
+dialog::backdrop {
+  background:#14263c66
+}
+.invalid {
+  border-color:#bc5b5b!important
+}
+@media(max-width:750px) {
+  dialog {
+    padding:22px
+  }
+}

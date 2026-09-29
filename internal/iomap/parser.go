@@ -1,8 +1,10 @@
+// Адаптер исходной таблицы физического IO: столбцы, размещения и правила инженерных имён.
 package iomap
 
 import (
 	"fmt"
 	"regexp"
+	"scheme-xml-generator/internal/domain/hardware"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,6 +36,7 @@ func ParseInventory(data []byte) (*Plan, error) {
 	return parseSheets(sheets, true)
 }
 
+// headerKey Нормализует первую строку заголовка IO-столбца для поиска известных полей таблицы.
 func headerKey(value string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(value), "\n")
 	line = strings.ToLower(line)
@@ -45,6 +48,7 @@ func headerKey(value string) string {
 	}, line)
 }
 
+// discoverHeaders Сопоставляет столбцы исходного IO-листа с полями адаптера и отмечает неоднозначные дубликаты.
 func discoverHeaders(row Row) map[string]string {
 	result := map[string]string{}
 	for column, value := range row.Cells {
@@ -96,6 +100,7 @@ func discoverHeaders(row Row) map[string]string {
 	return result
 }
 
+// completeHeaders Проверяет наличие обязательных столбцов физической IO-карты перед выбором листа.
 func completeHeaders(headers map[string]string) bool {
 	for _, key := range []string{"fcs", "cabinet", "type", "main", "redundant", "channel", "loop", "tagNo"} {
 		if headers[key] == "" {
@@ -114,18 +119,23 @@ type sourceRow struct {
 	Explicit, ExplicitReserve                                       string
 }
 
+// empty Распознаёт принятые в IO-таблице обозначения незаполненного значения.
 func empty(value string) bool {
 	value = strings.TrimSpace(value)
 	return value == "" || value == "-" || value == "—"
 }
+
+// normalizeName Преобразует табличные имена оборудования в идентификаторы с подчёркиванием.
 func normalizeName(value string) string {
 	return strings.ReplaceAll(strings.TrimSpace(value), "-", "_")
 }
 
+// ParseSheets Преобразует прочитанные листы в инвентарь ПЛК с именами сигналов для диагностического генератора.
 func ParseSheets(sheets []Sheet) (*Plan, error) {
 	return parseSheets(sheets, false)
 }
 
+// parseSheets Выбирает единственную IO-таблицу, проверяет размещения и собирает инвентарь; inventoryOnly пропускает вывод технологических имён.
 func parseSheets(sheets []Sheet, inventoryOnly bool) (*Plan, error) {
 	var source *Sheet
 	var header map[string]string
@@ -231,7 +241,7 @@ func parseSheets(sheets []Sheet, inventoryOnly bool) (*Plan, error) {
 			ci = len(plan.Controllers)
 			byController[key] = ci
 			moduleIndices[key] = map[string]int{}
-			plan.Controllers = append(plan.Controllers, Controller{Key: key, SourceFCS: sr.FCS, Name: defaultPLCName(sr.FCS, sr.Cabinet), Cabinet: sr.Cabinet, Modules: []Module{}})
+			plan.Controllers = append(plan.Controllers, Controller{Key: key, SourceController: sr.FCS, Name: defaultPLCName(sr.FCS, sr.Cabinet), Cabinet: sr.Cabinet, Modules: []Module{}})
 		}
 		controller := &plan.Controllers[ci]
 		for placement, name := range []string{sr.Main, sr.Redundant} {
@@ -361,17 +371,13 @@ func parseSheets(sheets []Sheet, inventoryOnly bool) (*Plan, error) {
 	return plan, nil
 }
 
+// moduleCapacity Возвращает число каналов поддержанного типа модуля IO-формата; неизвестный тип получает ноль.
 func moduleCapacity(kind string) int {
-	switch kind {
-	case "AI16H":
-		return 16
-	case "AOC4H":
-		return 4
-	case "DI32", "DO32P":
-		return 32
-	}
-	return 0
+	module, _ := hardware.Lookup(kind)
+	return module.Channels
 }
+
+// parseModule Разбирает табличное размещение на имя модуля, крейт и слот 00–15; это не аппаратный ModuleID.
 func parseModule(value string) (name, rack string, slot int, err error) {
 	m := modulePattern.FindStringSubmatch(strings.TrimSpace(value))
 	if m == nil {
@@ -383,8 +389,14 @@ func parseModule(value string) (name, rack string, slot int, err error) {
 	}
 	return fmt.Sprintf("%s_%02d", m[1], slot), m[1], slot, nil
 }
-func rackNumber(value string) int                  { n, _ := strconv.Atoi(strings.TrimPrefix(value, "A")); return n }
+
+// rackNumber Возвращает числовой порядок крейта Axx для раскладки инвентаря.
+func rackNumber(value string) int { n, _ := strconv.Atoi(strings.TrimPrefix(value, "A")); return n }
+
+// reserveTag Формирует имя свободного физического канала из принадлежности ПЛК и размещения.
 func reserveTag(fcs, module string, ch int) string { return fmt.Sprintf("_%s_%s_%d", fcs, module, ch) }
+
+// defaultPLCName Применяет подтверждённые имена ПЛК конкретного исходного IO-формата; это адаптация таблицы, не правило генерации.
 func defaultPLCName(fcs, cabinet string) string {
 	// Project-specific names confirmed against both AI.xlsx and AO.xlsx.
 	known := map[string]string{"FCS5:3000_D_SC_B05": "3000_D_SC_B05_1", "FCS6:3000_D_SC_B06": "3000_D_SC_B06_1", "FCS7:3000_D_SC_B07": "3000_D_SC_B07_1", "FCS8:3000_D_SC_B07": "3000_D_SC_B07_2"}
@@ -397,6 +409,7 @@ func defaultPLCName(fcs, cabinet string) string {
 	return cabinet
 }
 
+// signalTag Разрешает имя сигнала из явного поля, точного справочника или правил IO-формата; неоднозначность возвращает ошибкой.
 func signalTag(row sourceRow, redundant bool) (string, bool, error) {
 	explicit := row.Explicit
 	if redundant && row.ExplicitReserve != "" {
@@ -461,6 +474,7 @@ func signalTag(row sourceRow, redundant bool) (string, bool, error) {
 	return tag, false, nil
 }
 
+// latinLookalikes Заменяет кириллические двойники в обозначениях исходной таблицы перед проверкой имени сигнала.
 func latinLookalikes(value string) string {
 	return strings.NewReplacer("С", "C", "А", "A", "В", "B", "Е", "E", "К", "K", "М", "M", "Н", "H", "О", "O", "Р", "P", "Т", "T", "Х", "X").Replace(strings.TrimSpace(value))
 }

@@ -1,3 +1,4 @@
+// Контейнер OLE Compound File для готового BIFF8-потока Workbook.
 package xls
 
 import (
@@ -13,9 +14,8 @@ const (
 	difatSector uint32 = 0xFFFFFFFC
 )
 
-// compoundFile stores a Workbook stream in a version-3 Compound File. Small
-// workbooks are padded to the 4096-byte regular-stream cutoff, avoiding a mini
-// stream. BIFF readers stop at the worksheet EOF before this zero padding.
+// compoundFile упаковывает готовый Workbook в контейнер Compound File версии 3.
+// Возвращает XLS с directory/FAT/DIFAT; малые потоки дополняет до 4096 байт без mini-stream.
 func compoundFile(workbook []byte) []byte {
 	streamSize := max(len(workbook), 4096)
 	streamSectors := (streamSize + sectorSize - 1) / sectorSize
@@ -102,6 +102,8 @@ func compoundFile(workbook []byte) []byte {
 	return file
 }
 
+// writeDirectoryEntry формирует запись каталога Compound File для корня или потока Workbook.
+// Записывает UTF-16 имя, тип, связи дерева, стартовый сектор и размер в переданный 128-байтовый буфер.
 func writeDirectoryEntry(entry []byte, name string, kind byte, child, start uint32, size uint64) {
 	units := utf16.Encode([]rune(name))
 	for i, unit := range units {

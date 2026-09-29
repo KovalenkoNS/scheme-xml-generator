@@ -1,3 +1,4 @@
+// Контракт и проверка оформления BIFF8 перед сериализацией XLS.
 package xls
 
 import (
@@ -52,6 +53,8 @@ type Range struct {
 	FirstColumn, LastColumn int
 }
 
+// checkedFormatting проверяет таблицы оформления и диапазоны перед записью XLS.
+// Возвращает настройки с defaults; отклоняет неверные ссылки шрифтов/XF, размеры и пересечения объединений.
 func checkedFormatting(input Formatting, rows [][]Cell) (Formatting, error) {
 	f := input
 	if len(f.Fonts) == 0 && len(f.XFs) == 0 {
@@ -121,6 +124,8 @@ func checkedFormatting(input Formatting, rows [][]Cell) (Formatting, error) {
 	if f.DefaultXF == 0 {
 		f.DefaultXF = 15
 	}
+	// Проверяет, что индекс ссылается на XF ячейки в уже проверенной таблице.
+	// Стилевые XF запрещены для DefaultXF, ячеек и колонок листа.
 	validCellXF := func(index uint16) bool { return int(index) < len(f.XFs) && f.XFs[index][4]&4 == 0 }
 	if !validCellXF(f.DefaultXF) {
 		return f, fmt.Errorf("xls: invalid default cell XF %d", f.DefaultXF)
@@ -194,6 +199,8 @@ func checkedFormatting(input Formatting, rows [][]Cell) (Formatting, error) {
 	return f, nil
 }
 
+// validBIFFString проверяет длину тела строки в FONT/FORMAT записи оформления BIFF8.
+// Сопоставляет количество символов с Unicode-флагом и фактическими байтами, возвращая признак допустимости.
 func validBIFFString(data []byte, count int, flag byte) bool {
 	if flag > 1 {
 		return false
@@ -204,6 +211,8 @@ func validBIFFString(data []byte, count int, flag byte) bool {
 	return len(data) == count
 }
 
+// defaultFormattingTables создаёт базовые таблицы шрифтов и XF при отсутствии заданного оформления XLS.
+// Возвращает Arial/General с обязательными 16 XF без чтения файлов или запуска Excel.
 func defaultFormattingTables() ([][]byte, [][]byte) {
 	font := words(200, 0, 0x7FFF, 400, 0)
 	font = append(font, 0, 0, 0, 0, 5, 0)
@@ -223,6 +232,8 @@ func defaultFormattingTables() ([][]byte, [][]byte) {
 	return [][]byte{font}, xfs
 }
 
+// cellXF выбирает стиль одной ячейки при сериализации листа XLS.
+// Возвращает явный индекс CellXFs либо DefaultXF, если индивидуальное оформление не задано.
 func (f Formatting) cellXF(row, column int) uint16 {
 	if row < len(f.CellXFs) && column < len(f.CellXFs[row]) {
 		return f.CellXFs[row][column]
@@ -230,6 +241,8 @@ func (f Formatting) cellXF(row, column int) uint16 {
 	return f.DefaultXF
 }
 
+// storageBytes оценивает байтовый объём записей оформления до выделения XLS-буферов.
+// Суммирует таблицы стилей, палитру, колонки и объединения для общей проверки лимита книги.
 func (f Formatting) storageBytes() uint64 {
 	size := uint64(len(f.Palette) + len(f.Columns)*16 + len(f.Merges)*12)
 	for _, records := range [][][]byte{f.Fonts, f.Formats, f.XFs} {

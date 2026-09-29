@@ -1,0 +1,391 @@
+package fbd
+
+import (
+	"fmt"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/contracts"
+	"scheme-xml-generator/internal/generator/xmlmodel"
+	"scheme-xml-generator/internal/library"
+	"strings"
+	"testing"
+)
+
+func TestNormalizePOURequestsAssignsDocumentWideModuleIDsAndEffectiveTemplates(t *testing.T) {
+	explicit := int64(0)
+	requests, err := NormalizePOURequests([]contracts.POURequest{
+		{
+			Name: "AI_POU", DefaultTemplateKey: "ai-default",
+			IO: &contracts.IORequest{Type: "ai", Modules: []contracts.IOModuleRequest{
+				{ID: &explicit, Signals: []contracts.SignalRequest{{ObjectName: "_AI_0"}}},
+				{Signals: []contracts.SignalRequest{{ObjectName: "_AI_1", TemplateKey: "ai-override"}}},
+			}},
+		},
+		{
+			Name: "AO_POU", DefaultTemplateKey: "ao-default",
+			IO: &contracts.IORequest{Type: "AO", Modules: []contracts.IOModuleRequest{
+				{Signals: []contracts.SignalRequest{{ObjectName: "_AO_0"}}},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := *requests[0].IO.Modules[0].ID; got != 0 {
+		t.Fatalf("explicit module ID=%d want 0", got)
+	}
+	if got := *requests[0].IO.Modules[1].ID; got != 1 {
+		t.Fatalf("first automatic module ID=%d want 1", got)
+	}
+	if got := *requests[1].IO.Modules[0].ID; got != 2 {
+		t.Fatalf("second automatic module ID=%d want 2", got)
+	}
+	firstSignals := POUSignals(requests[0])
+	if len(firstSignals) != 2 || firstSignals[0].TemplateKey != "ai-default" || firstSignals[1].TemplateKey != "ai-override" {
+		t.Fatalf("effective templates=%+v", firstSignals)
+	}
+}
+
+func TestNormalizePOURequestsRejectsInvalidIOTopology(t *testing.T) {
+	id := int64(7)
+	tests := []struct {
+		name     string
+		requests []contracts.POURequest
+	}{
+		{
+			name: "mixed flat and io",
+			requests: []contracts.POURequest{{Signals: []contracts.SignalRequest{{TemplateKey: "x"}}, IO: &contracts.IORequest{
+				Type: "AI", Modules: []contracts.IOModuleRequest{{Signals: []contracts.SignalRequest{{TemplateKey: "x"}}}},
+			}}},
+		},
+		{name: "unknown type", requests: []contracts.POURequest{{IO: &contracts.IORequest{Type: "XX", Modules: []contracts.IOModuleRequest{{Signals: []contracts.SignalRequest{{TemplateKey: "x"}}}}}}}},
+		{name: "empty module", requests: []contracts.POURequest{{IO: &contracts.IORequest{Type: "DI", Modules: []contracts.IOModuleRequest{{}}}}}},
+		{
+			name: "invalid binding prefix",
+			requests: []contracts.POURequest{{DefaultTemplateKey: "x", IO: &contracts.IORequest{
+				Type: "AI", Modules: []contracts.IOModuleRequest{{BindingPrefix: "_IO bad", Signals: []contracts.SignalRequest{{}}}},
+			}}},
+		},
+		{
+			name: "invalid instance name",
+			requests: []contracts.POURequest{{DefaultTemplateKey: "x", IO: &contracts.IORequest{
+				Type: "DO", Modules: []contracts.IOModuleRequest{{InstanceName: "module/name", Signals: []contracts.SignalRequest{{}}}},
+			}}},
+		},
+		{
+			name: "binding prefix longer than 160 characters",
+			requests: []contracts.POURequest{{DefaultTemplateKey: "x", IO: &contracts.IORequest{
+				Type: "AI", Modules: []contracts.IOModuleRequest{{BindingPrefix: strings.Repeat("A", 161), Signals: []contracts.SignalRequest{{}}}},
+			}}},
+		},
+		{
+			name: "capacity",
+			requests: []contracts.POURequest{{DefaultTemplateKey: "x", IO: &contracts.IORequest{
+				Type: "AO", Modules: []contracts.IOModuleRequest{{Signals: make([]contracts.SignalRequest, 5)}},
+			}}},
+		},
+		{
+			name: "duplicate document-wide id",
+			requests: []contracts.POURequest{
+				{DefaultTemplateKey: "x", IO: &contracts.IORequest{Type: "AI", Modules: []contracts.IOModuleRequest{{ID: &id, Signals: []contracts.SignalRequest{{}}}}}},
+				{DefaultTemplateKey: "x", IO: &contracts.IORequest{Type: "DO", Modules: []contracts.IOModuleRequest{{ID: &id, Signals: []contracts.SignalRequest{{}}}}}},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := NormalizePOURequests(test.requests); err == nil {
+				t.Fatal("invalid I/O topology was accepted")
+			}
+		})
+	}
+}
+
+func TestGenerateAIPhysicalBindingSharesOneCardAcrossValueAndStatus(t *testing.T) {
+	ref := loadAD3V2Template(t)
+	moduleID := int64(8)
+	request := contracts.POURequest{
+		Name: "AI_PHYSICAL", DefaultTemplateKey: ref.Key,
+		IO: &contracts.IORequest{Type: ioTypeAI, Modules: []contracts.IOModuleRequest{{
+			ID: &moduleID, BindingPrefix: "_IO_IU6",
+			Signals: []contracts.SignalRequest{{ObjectName: "_AI_SIGNAL", NameMode: "base"}},
+		}}},
+	}
+	resolved := resolvedIOPOU(request, ref)
+	requirements, err := RequirementsForDocument([]contracts.ResolvedPOU{resolved})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requirements != (contracts.DocumentRequirements{T11Count: 13, CardCount: 4, POUCount: 1, SignalCount: 1}) {
+		t.Fatalf("AI requirements=%+v", requirements)
+	}
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, []contracts.ResolvedPOU{resolved}, contracts.IDRange{T11Start: 5_000_000, CardStart: 900_000, POUID: 300_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := parseGeneratedDocument(t, result.XML)
+	physicalCards := physicalCards(document)
+	if len(physicalCards) != 1 || physicalCards[0].Info != "_IO_IU6_0" || physicalCards[0].Name != "[8] CAIH16V > канал 0" || physicalCards[0].ClusterPath != "" {
+		t.Fatalf("AI physical cards=%+v", physicalCards)
+	}
+	physicalBlocks := blocksOfType(document.POUS.Items[0], "38")
+	if len(physicalBlocks) != 2 || physicalBlocks[0].Params.CardID != physicalBlocks[1].Params.CardID {
+		t.Fatalf("AI physical blocks=%+v", physicalBlocks)
+	}
+	fields := map[string]string{}
+	for _, block := range physicalBlocks {
+		fields[block.Params.Text] = block.Graphics.Width
+		if block.Params.ISAObjectID != "17679" || block.Params.CI != "0" || block.Params.CO != "1" {
+			t.Fatalf("AI physical params=%+v", block.Params)
+		}
+	}
+	if fields[".ValueDINT"] != "220" || fields[".Status"] != "200" || len(document.POUS.Items[0].ISAGraf.Links.Items) != 2 {
+		t.Fatalf("AI fields=%v links=%d", fields, len(document.POUS.Items[0].ISAGraf.Links.Items))
+	}
+	if result.Summary.IOModuleCount != 1 || result.Summary.POUs[0].Signals[0].ModuleID == nil || *result.Summary.POUs[0].Signals[0].ModuleID != 8 || *result.Summary.POUs[0].Signals[0].Channel != 0 {
+		t.Fatalf("AI summary=%+v", result.Summary)
+	}
+	for _, record := range document.ISAObjects.Items {
+		if record.ID == "17679" {
+			t.Fatal("external analog reference type 17679 must not be emitted in ISAOBJSINFO")
+		}
+	}
+}
+
+func TestGenerateAOPhysicalBindingUsesFreeConverterResult(t *testing.T) {
+	ref := ioFixtureRef(ioTypeAO, 1)
+	moduleID := int64(11)
+	request := contracts.POURequest{
+		Name: "AO_PHYSICAL", DefaultTemplateKey: ref.Key,
+		IO: &contracts.IORequest{Type: ioTypeAO, Modules: []contracts.IOModuleRequest{{
+			ID: &moduleID, BindingPrefix: "_IO_QU29", Signals: []contracts.SignalRequest{{ObjectName: "_AO_SIGNAL", NameMode: "base"}},
+		}}},
+	}
+	resolved := resolvedIOPOU(request, ref)
+	requirements, err := RequirementsForDocument([]contracts.ResolvedPOU{resolved})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requirements != (contracts.DocumentRequirements{T11Count: 3, CardCount: 1, POUCount: 1, SignalCount: 1}) {
+		t.Fatalf("AO requirements=%+v", requirements)
+	}
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, []contracts.ResolvedPOU{resolved}, contracts.IDRange{T11Start: 5_100_000, CardStart: 910_000, POUID: 310_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := parseGeneratedDocument(t, result.XML)
+	pou := document.POUS.Items[0]
+	physical := blocksOfType(pou, "38")
+	if len(physical) != 1 || physical[0].Info != "[11] CAOH4V > канал 0.ValueDINT" || physical[0].Params.CI != "1" {
+		t.Fatalf("AO physical=%+v", physical)
+	}
+	if len(pou.ISAGraf.Links.Items) != 1 || !strings.Contains(pou.ISAGraf.Links.Items[0].FirstPoint.Value, "|False|Result|") || !strings.Contains(pou.ISAGraf.Links.Items[0].LastPoint.Last, "|True|0|") {
+		t.Fatalf("AO link=%+v", pou.ISAGraf.Links.Items)
+	}
+}
+
+func TestGenerateDigitalPhysicalBindingBuildsFullModule(t *testing.T) {
+	for _, ioType := range []string{ioTypeDI, ioTypeDO} {
+		t.Run(ioType, func(t *testing.T) {
+			ref := ioFixtureRef(ioType, 1)
+			moduleID := int64(41)
+			request := contracts.POURequest{
+				Name: ioType + "_PHYSICAL", DefaultTemplateKey: ref.Key,
+				IO: &contracts.IORequest{Type: ioType, Modules: []contracts.IOModuleRequest{{
+					ID: &moduleID, BindingPrefix: "_IO_TEST", InstanceName: "_D32_MODULE",
+					Signals: []contracts.SignalRequest{{ObjectName: "_DIGITAL_SIGNAL", NameMode: "base"}},
+				}}},
+			}
+			resolved := resolvedIOPOU(request, ref)
+			requirements, err := RequirementsForDocument([]contracts.ResolvedPOU{resolved})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if requirements != (contracts.DocumentRequirements{T11Count: 67, CardCount: 34, POUCount: 1, SignalCount: 1}) {
+				t.Fatalf("%s requirements=%+v", ioType, requirements)
+			}
+			result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, []contracts.ResolvedPOU{resolved}, contracts.IDRange{T11Start: 5_200_000, CardStart: 920_000, POUID: 320_000})
+			if err != nil {
+				t.Fatal(err)
+			}
+			document := parseGeneratedDocument(t, result.XML)
+			pou := document.POUS.Items[0]
+			if len(blocksOfType(pou, "38")) != 32 || len(pou.ISAGraf.Links.Items) != 33 || len(physicalCards(document)) != 33 {
+				t.Fatalf("%s blocks38=%d links=%d physicalCards=%d", ioType, len(blocksOfType(pou, "38")), len(pou.ISAGraf.Links.Items), len(physicalCards(document)))
+			}
+			d32 := findBlock(t, pou, "_D32_MODULE")
+			if d32.ObjectType != "37" || d32.Params.ISAObjectID != "1933" || d32.Params.CI != "34" || d32.Params.CO != "33" || d32.Params.Initial == nil || *d32.Params.Initial != "" {
+				t.Fatalf("%s D32=%+v", ioType, d32)
+			}
+			firstPhysical := findBlock(t, pou, "[41] "+ioDeviceName(ioType)+" > канал 0.Value")
+			logical := findBlock(t, pou, "_DIGITAL_SIGNAL")
+			assertDigitalDirections(t, ioType, pou.ISAGraf.Links.Items, d32, firstPhysical, logical)
+			foundType := false
+			for _, record := range document.ISAObjects.Items {
+				if record == (xmlmodel.OutputISAObject{ID: "1933", Info: "D32V_v1", LibraryName: "TACSfbl"}) {
+					foundType = true
+				}
+				if record.ID == "17706" {
+					t.Fatal("external digital reference type 17706 must not be emitted in ISAOBJSINFO")
+				}
+			}
+			if !foundType {
+				t.Fatal("D32V_v1 ISA type record is missing")
+			}
+		})
+	}
+}
+
+func TestGenerateDigitalModulesShareACompactHardwareLane(t *testing.T) {
+	ref := ioFixtureRef(ioTypeDI, 1)
+	firstID, secondID := int64(4), int64(5)
+	request := contracts.POURequest{
+		Name: "TWO_DI_MODULES", DefaultTemplateKey: ref.Key,
+		IO: &contracts.IORequest{Type: ioTypeDI, Modules: []contracts.IOModuleRequest{
+			{ID: &firstID, BindingPrefix: "_IO_IU4", InstanceName: "_D32_FIRST", Signals: []contracts.SignalRequest{{ObjectName: "_DI_FIRST", NameMode: "base"}}},
+			{ID: &secondID, BindingPrefix: "_IO_IU5", InstanceName: "_D32_SECOND", Signals: []contracts.SignalRequest{{ObjectName: "_DI_SECOND", NameMode: "base"}}},
+		}},
+	}
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(
+		contracts.Request{}, []contracts.ResolvedPOU{resolvedIOPOU(request, ref, ref)},
+		contracts.IDRange{T11Start: 5_250_000, CardStart: 925_000, POUID: 325_000},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := parseGeneratedDocument(t, result.XML)
+	first := findBlock(t, document.POUS.Items[0], "_D32_FIRST")
+	second := findBlock(t, document.POUS.Items[0], "_D32_SECOND")
+	if first.Graphics.X != second.Graphics.X {
+		t.Fatalf("digital module X positions diverged: first=%s second=%s", first.Graphics.X, second.Graphics.X)
+	}
+	if intValue(second.Graphics.Y)-intValue(first.Graphics.Y) != 770 {
+		t.Fatalf("digital module vertical spacing: first=%s second=%s", first.Graphics.Y, second.Graphics.Y)
+	}
+}
+
+func TestRequirementsRejectsAmbiguousDigitalAnchor(t *testing.T) {
+	ref := ioFixtureRef(ioTypeDI, 2)
+	moduleID := int64(0)
+	request := contracts.POURequest{
+		DefaultTemplateKey: ref.Key,
+		IO: &contracts.IORequest{Type: ioTypeDI, Modules: []contracts.IOModuleRequest{{
+			ID: &moduleID, Signals: []contracts.SignalRequest{{ObjectName: "_AMBIGUOUS", NameMode: "base"}},
+		}}},
+	}
+	if _, err := RequirementsForDocument([]contracts.ResolvedPOU{resolvedIOPOU(request, ref)}); err == nil || !strings.Contains(err.Error(), "ровно одна") {
+		t.Fatalf("ambiguous anchor error=%v", err)
+	}
+}
+
+func TestGenerateIOWarnsAboutFallbackBindingPrefix(t *testing.T) {
+	ref := ioFixtureRef(ioTypeAO, 1)
+	moduleID := int64(2)
+	request := contracts.POURequest{
+		DefaultTemplateKey: ref.Key,
+		IO: &contracts.IORequest{Type: ioTypeAO, Modules: []contracts.IOModuleRequest{{
+			ID: &moduleID, Signals: []contracts.SignalRequest{{ObjectName: "_AO_FALLBACK", NameMode: "base"}},
+		}}},
+	}
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, []contracts.ResolvedPOU{resolvedIOPOU(request, ref)}, contracts.IDRange{T11Start: 5_300_000, CardStart: 930_000, POUID: 330_000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Summary.POUs[0].IOModules) != 1 || result.Summary.POUs[0].IOModules[0].BindingPrefix != "_IO_QU2" || result.Summary.POUs[0].IOModules[0].InstanceName != "_IO_AO_2" {
+		t.Fatalf("fallback module summary=%+v", result.Summary.POUs[0].IOModules)
+	}
+	found := false
+	for _, warning := range result.Warnings {
+		if strings.Contains(warning, "_IO_QU2") && strings.Contains(warning, "сверьте") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("fallback warning is missing: %v", result.Warnings)
+	}
+}
+
+func resolvedIOPOU(request contracts.POURequest, refs ...*library.TemplateRef) contracts.ResolvedPOU {
+	signals := POUSignals(request)
+	resolved := make([]contracts.ResolvedSignal, len(signals))
+	for index, signal := range signals {
+		ref := refs[min(index, len(refs)-1)]
+		if signal.TemplateKey == "" {
+			signal.TemplateKey = ref.Key
+		}
+		resolved[index] = contracts.ResolvedSignal{Request: signal, Ref: ref}
+	}
+	return contracts.ResolvedPOU{Request: request, Signals: resolved}
+}
+
+func ioFixtureRef(ioType string, anchors int) *library.TemplateRef {
+	template := &library.Template{ID: "io-" + ioType, Name: "IO_" + ioType, Width: "300", Height: "200", Background: "16777215"}
+	owner := &library.ObjectType{ID: "io-owner-" + ioType, Name: "IO_OWNER_" + ioType}
+	loaded := &library.LoadedLibrary{FileName: "io-fixture.xml", Version: "29", TypeSignatures: map[string]library.Signature{}}
+	for index := 0; index < anchors; index++ {
+		id := fmt.Sprintf("%d", index+1)
+		switch ioType {
+		case ioTypeAO:
+			template.Contents.Primitives = append(template.Contents.Primitives, library.Primitive{
+				ID: id, ObjectType: "36", X: "100", Y: "50", Width: "130", Height: "80",
+				Params: "[TEXT]=\n[CI]=3\n[CO]=1\n[COMMENT]=false", CardID: "0", ISAObjectID: "791",
+				TypeName: "REAL_TO_DINT", LibraryName: "TACSfbl",
+			})
+		default:
+			cardID := fmt.Sprintf("card-%d", index+1)
+			initial := "FALSE"
+			prefix := ""
+			if anchors > 1 {
+				prefix = fmt.Sprintf("_S%d", index+1)
+			}
+			owner.ISAObjects.Items = append(owner.ISAObjects.Items, library.ISAObject{
+				ID: cardID, PrefixAttr: prefix, InitialValue: &initial,
+				TypeName: "BOOL", LibraryName: "Системная",
+			})
+			template.Contents.Primitives = append(template.Contents.Primitives, library.Primitive{
+				ID: id, ObjectType: "31", X: "100", Y: strconvItoa(40 + index*30), Width: "170", Height: "20",
+				Params: "[TEXT]=\n[CI]=1\n[CO]=1\n[COMMENT]=false", CardID: cardID, ISAObjectID: "-9",
+			})
+		}
+	}
+	return &library.TemplateRef{Key: "fixture:" + ioType, Library: loaded, Owner: owner, Template: template}
+}
+
+func strconvItoa(value int) string { return fmt.Sprintf("%d", value) }
+
+func physicalCards(document xmlmodel.OutputDocument) []xmlmodel.OutputISACard {
+	result := []xmlmodel.OutputISACard{}
+	for _, card := range document.ISACards.Items {
+		if card.IsRetain == "-1" {
+			result = append(result, card)
+		}
+	}
+	return result
+}
+
+func blocksOfType(pou xmlmodel.OutputPOU, objectType string) []xmlmodel.OutputBlock {
+	result := []xmlmodel.OutputBlock{}
+	for _, block := range pou.ISAGraf.Blocks.Items {
+		if block.ObjectType == objectType {
+			result = append(result, block)
+		}
+	}
+	return result
+}
+
+func assertDigitalDirections(t *testing.T, ioType string, links []xmlmodel.OutputLink, d32, physical, logical xmlmodel.OutputBlock) {
+	t.Helper()
+	foundPhysical, foundLogical := false, false
+	for _, link := range links {
+		fp, lp := link.FirstPoint.Value, link.LastPoint.Last
+		if ioType == ioTypeDI {
+			foundPhysical = foundPhysical || strings.HasPrefix(fp, physical.T11ID+"|False|0|") && strings.HasPrefix(lp, d32.T11ID+"|True|i00|")
+			foundLogical = foundLogical || strings.HasPrefix(fp, d32.T11ID+"|False|_00|") && strings.HasPrefix(lp, logical.T11ID+"|True|0|")
+		} else {
+			foundLogical = foundLogical || strings.HasPrefix(fp, logical.T11ID+"|False|0|") && strings.HasPrefix(lp, d32.T11ID+"|True|i00|")
+			foundPhysical = foundPhysical || strings.HasPrefix(fp, d32.T11ID+"|False|_00|") && strings.HasPrefix(lp, physical.T11ID+"|True|0|")
+		}
+	}
+	if !foundPhysical || !foundLogical {
+		t.Fatalf("%s direction physical=%v logical=%v links=%+v", ioType, foundPhysical, foundLogical, links)
+	}
+}

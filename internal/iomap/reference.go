@@ -1,3 +1,4 @@
+// Справочник подтверждённых имён конкретного IO-источника; не участвует в выборе XML-шаблонов.
 package iomap
 
 import (
@@ -21,6 +22,7 @@ var referenceTags = func() map[string]string {
 	return values
 }()
 
+// referenceKey Строит точный ключ строки и размещения для справочника инженерных имён, сохраняя исходный FCS.
 func referenceKey(row sourceRow, redundant bool) string {
 	if row.OriginalFCS != "" {
 		row.FCS = row.OriginalFCS
@@ -29,6 +31,7 @@ func referenceKey(row sourceRow, redundant bool) string {
 	return string(data)
 }
 
+// referenceTag Возвращает подтверждённый тег только при полном совпадении исходных полей и физического размещения.
 func referenceTag(row sourceRow, redundant bool) string {
 	return referenceTags[referenceKey(row, redundant)]
 }

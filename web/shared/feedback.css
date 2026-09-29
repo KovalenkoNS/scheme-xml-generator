@@ -1,0 +1,19 @@
+/* Общие текстовые состояния и сообщения; содержание формируют предметные компоненты. */
+.muted {
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.65;
+  margin:9px 0
+}
+.notice {
+  border-radius:7px;
+  padding:11px 14px;
+  margin:15px 0;
+  font-size:13px;
+  line-height:1.55;
+  background:#edf3ff
+}
+.error {
+  background:#fff0f0;
+  color:var(--error)
+}

@@ -1,0 +1,127 @@
+/* Источники Host и локальные файлы: карточка подключения, список загрузок и ошибки разбора. */
+.source-badge {
+  font-size:12px;
+  color:var(--muted);
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:6px 11px;
+  background:#fff
+}
+.source-panel {
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:22px 24px;
+  background:white;
+  margin-bottom:24px
+}
+.source-top {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px
+}
+.source-top p {
+  font-size:13px;
+  line-height:1.55;
+  color:var(--muted);
+  margin:7px 0 0;
+  max-width:620px
+}
+.connection p {
+  font-size:13px;
+  line-height:1.55;
+  color:var(--muted);
+  margin:7px 0 0;
+  max-width:620px
+}
+.connection {
+  display:flex;
+  align-items:flex-start;
+  gap:15px
+}
+.connection-dot {
+  width:9px;
+  height:9px;
+  background:#9eacba;
+  border-radius:50%;
+  margin-top:5px;
+  flex-shrink:0
+}
+.route {
+  font-size:12px;
+  color:#536c82;
+  margin:22px 0 0 24px
+}
+.route span {
+  margin:0 12px;
+  color:#a5b2bd
+}
+.source-list {
+  list-style:none;
+  margin:0;
+  padding:0
+}
+.source-list li {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  border-top:1px solid #edf0f4;
+  padding:12px 0 0;
+  margin-top:12px
+}
+.file-info {
+  min-width:0;
+  flex:1
+}
+.file-info strong {
+  display:block;
+  overflow-wrap:anywhere;
+  font-size:13px;
+  font-weight:600
+}
+.file-info small {
+  color:var(--muted);
+  display:block;
+  margin-top:4px;
+  line-height:1.5
+}
+.file-info .file-error {
+  color:var(--error)
+}
+.file-icon {
+  display:grid;
+  place-items:center;
+  width:34px;
+  height:36px;
+  background:#eef3f6;
+  border-radius:5px;
+  font-size:10px;
+  color:#577086
+}
+.empty-note {
+  font-size:12px;
+  color:var(--muted);
+  margin:17px 0 0
+}
+@media(max-width:750px) {
+  .source-panel {
+    padding:18px
+  }
+  .source-top {
+    align-items:flex-start
+  }
+  .source-top .button {
+    font-size:12px;
+    padding:9px
+  }
+  .route {
+    font-size:10px;
+    margin-left:0
+  }
+  .route span {
+    margin:0 4px
+  }
+  .source-badge {
+    font-size:10px
+  }
+}

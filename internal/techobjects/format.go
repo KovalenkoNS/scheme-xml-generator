@@ -1,3 +1,4 @@
+// Встроенное оформление технологического XLS по подтверждённому экспортному образцу.
 package techobjects
 
 import (
@@ -15,6 +16,8 @@ import (
 //go:embed assets/xls_format.json
 var nativeFormattingJSON []byte
 
+// nativeFormatting читает встроенное оформление XLS технологических объектов без установленного Excel.
+// Возвращает таблицы стилей/размеры/объединения из assets/xls_format.json либо ошибку embedded JSON.
 func nativeFormatting() (xls.Formatting, error) {
 	var format xls.Formatting
 	if err := json.Unmarshal(nativeFormattingJSON, &format); err != nil {

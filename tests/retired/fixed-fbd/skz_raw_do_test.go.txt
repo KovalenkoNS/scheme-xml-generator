@@ -1,0 +1,51 @@
+package fbd
+
+import (
+	"encoding/xml"
+	"scheme-xml-generator/internal/generator/addressing"
+	"scheme-xml-generator/internal/generator/contracts"
+	"scheme-xml-generator/internal/generator/planning"
+	"scheme-xml-generator/internal/generator/xmlmodel"
+	"scheme-xml-generator/internal/inputs/assignments"
+	"testing"
+)
+
+func TestSKZDOCaseInsensitiveSourcesShareCanonicalCardAcrossPOUs(t *testing.T) {
+	source := skzTestSource()
+	source.Groups = source.Groups[1:]
+	source.Groups[0].Modules[1].Channels[0].Tag = "_output_DDVH"
+	source.Groups = append(source.Groups, assignments.Group{Key: "PLC:DO:A4", ControllerName: "PLC", Kind: "DO", Prefix: "A4", POUName: "DO_A4", Modules: []assignments.Module{
+		{Name: "A4-00", Type: "DO32P", ObjectType: "D32V", Capacity: 32, Channels: []assignments.Channel{{Channel: 10, Tag: "_Output_ddvh", SourceRow: 5}}},
+	}})
+	plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, "fbd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := (Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Summary.POUCount != 2 || result.Summary.Blocks != 7 || result.Summary.Links != 4 || result.Summary.Cards != 5 {
+		t.Fatal("case variants must not create additional source cards", result.Summary)
+	}
+	var document xmlmodel.OutputDocument
+	if err := xml.Unmarshal(result.XML, &document); err != nil {
+		t.Fatal(err)
+	}
+	card, references := "", 0
+	for _, pou := range document.POUS.Items {
+		for _, block := range pou.ISAGraf.Blocks.Items {
+			if block.Params.ISAObjectID != "-9" || block.Info == "_ALARM_DDVH" {
+				continue
+			}
+			if block.Info != "_OUTPUT_DDVH" || card != "" && card != block.Params.CardID {
+				t.Fatal("BOOL reference must use the canonical card name and ID", block)
+			}
+			card = block.Params.CardID
+			references++
+		}
+	}
+	if references != 3 {
+		t.Fatal("case variants lost repeated DO references", references)
+	}
+}

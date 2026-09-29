@@ -1,0 +1,370 @@
+package fbd
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"os"
+	"reflect"
+	"scheme-xml-generator/internal/generator/addressing"
+	"scheme-xml-generator/internal/generator/contracts"
+	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	"scheme-xml-generator/internal/generator/planning"
+	"scheme-xml-generator/internal/generator/xmlcodec"
+	"scheme-xml-generator/internal/generator/xmlmodel"
+	"scheme-xml-generator/internal/inputs/assignments"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func nativeDORequest(source *assignments.Plan) contracts.ModuleMappingRequest {
+	request := contracts.ModuleMappingRequest{Kind: "fbd", DOFBDProfile: planning.LegacyD32CPU850}
+	ids := map[string]int64{}
+	for _, group := range source.Groups {
+		if group.Kind != "DO" {
+			continue
+		}
+		choice := contracts.ModuleGroupRequest{GroupKey: group.Key}
+		for range group.Modules {
+			id := ids[group.ControllerName]
+			choice.ModuleIDs = append(choice.ModuleIDs, &id)
+			ids[group.ControllerName]++
+		}
+		request.POUs = append(request.POUs, choice)
+	}
+	return request
+}
+
+func nativeDOGenerate(t *testing.T, plan contracts.ControllerPlan) (contracts.Result, xmlmodel.OutputDocument) {
+	t.Helper()
+	result, err := (Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 101, T11Start: 201, CardStart: 10001})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc xmlmodel.OutputDocument
+	if err := xml.Unmarshal(result.XML, &doc); err != nil {
+		t.Fatal(err)
+	}
+	return result, doc
+}
+
+func TestSKZNativeDOSparseInversionAndReserveModules(t *testing.T) {
+	source := skzTestSource()
+	// Same owner with varying case must resolve to a single BOOL card.
+	source.Groups[1].Modules[1].Channels[0].Tag = "_output_ddvh"
+	source.Groups[1].Modules[0].Channels[0].Template = "простой"
+	source.Groups[1].Modules[0].Channels[1].Template = "DO-1"
+	request := nativeDORequest(source)
+	request.POUs[0].ModuleCount = skzTestModuleCount(3)
+	addedID := int64(2)
+	request.POUs[0].ModuleIDs = append(request.POUs[0].ModuleIDs, &addedID)
+	plans, err := planning.PrepareModulePlans(source, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, doc := nativeDOGenerate(t, plans[0])
+	if result.Summary.Blocks != 15 || result.Summary.Links != 12 || result.Summary.Cards != 8 {
+		t.Fatalf("unexpected graph counts: %+v", result.Summary)
+	}
+	req, err := planning.RequirementsForController(plans[0])
+	if err != nil || req.T11Count != 27 || req.CardCount != 8 {
+		t.Fatalf("requirements %+v: %v", req, err)
+	}
+	counts := map[string]int{}
+	for _, block := range doc.POUS.Items[0].ISAGraf.Blocks.Items {
+		counts[block.ObjectType]++
+		if strings.Contains(block.Info, "_output_ddvh") || strings.Contains(block.Info, "_PLC_A3_05_") {
+			t.Fatalf("invented/case-mismatched BOOL %s", block.Info)
+		}
+	}
+	if !reflect.DeepEqual(counts, map[string]int{"31": 3, "35": 3, "36": 3, "37": 3, "38": 3}) {
+		t.Fatal(counts)
+	}
+	if !bytes.Contains(result.XML, []byte("_IO_I0_DO32P_0_VAL_DIAG.Quality")) || !bytes.Contains(result.XML, []byte("_PLC_A3_05")) || bytes.Contains(result.XML, []byte("_IO_I0_DO32P_1_VAL_DIAG")) {
+		t.Fatal("channel-zero diagnostics or PLC-based owner missing")
+	}
+	if result.Summary.T11Last != 227 || result.Summary.CardLast != 10008 {
+		t.Fatal("reservation includes all blocks and links", result.Summary)
+	}
+}
+
+func TestSKZNativeDOProfilePreflight(t *testing.T) {
+	source := skzTestSource()
+	for _, name := range []string{"missing_ids", "nil_id", "duplicate_id", "negative_id", "range", "unknown_profile", "st_profile", "mixed_ai"} {
+		t.Run(name, func(t *testing.T) {
+			request := nativeDORequest(source)
+			switch name {
+			case "missing_ids":
+				request.POUs[0].ModuleIDs = nil
+			case "nil_id":
+				request.POUs[0].ModuleIDs[0] = nil
+			case "duplicate_id":
+				request.POUs[0].ModuleIDs[1] = request.POUs[0].ModuleIDs[0]
+			case "negative_id":
+				*request.POUs[0].ModuleIDs[0] = -1
+			case "range":
+				*request.POUs[0].ModuleIDs[0] = contracts.MaxTransportID + 1
+			case "unknown_profile":
+				request.DOFBDProfile = "native"
+			case "st_profile":
+				request.Kind = "st"
+			case "mixed_ai":
+				request.POUs = append(request.POUs, contracts.ModuleGroupRequest{GroupKey: source.Groups[0].Key})
+			}
+			if _, err := planning.PrepareModulePlans(source, request); err == nil {
+				t.Fatal("unsupported request accepted")
+			}
+		})
+	}
+	plans, err := planning.PrepareModulePlans(source, nativeDORequest(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*contracts.ProgramContext){
+		func(ctx *contracts.ProgramContext) { ctx.ControllerTypeName = cpuprofile.ControllerCPU715 },
+		func(ctx *contracts.ProgramContext) { ctx.PhysicalProfile = addressing.PhysicalProfileLegacy },
+	} {
+		ctx := addressing.DefaultModuleContext()
+		mutate(&ctx)
+		if _, err := (Generator{}).GenerateModuleMapping(plans[0], ctx, contracts.IDRange{POUID: 101, T11Start: 201, CardStart: 10001}); err == nil {
+			t.Fatal("native DO emitted with incompatible CPU/address profile")
+		}
+	}
+}
+
+// Reconstruct only the proven native graph semantics. Transport IDs, source
+// ordering, legacy display labels and the source's remote cabinet prefix do not
+// become generation rules. Names always use the selected PLC, by owner request.
+func nativeDOGraphModules(t *testing.T, doc xmlmodel.OutputDocument) []contracts.PhysicalModule {
+	t.Helper()
+	var modules []contracts.PhysicalModule
+	for _, pou := range doc.POUS.Items {
+		blocks := map[string]xmlmodel.OutputBlock{}
+		cards := map[string]xmlmodel.OutputISACard{}
+		incoming := map[string]string{}
+		for _, card := range doc.ISACards.Items {
+			cards[card.ID] = card
+		}
+		for _, block := range pou.ISAGraf.Blocks.Items {
+			blocks[block.T11ID] = block
+		}
+		for _, link := range pou.ISAGraf.Links.Items {
+			from, to := strings.Split(link.FirstPoint.Value, "|"), strings.Split(link.LastPoint.Last, "|")
+			incoming[to[0]+"|"+to[2]] = from[0]
+		}
+		for _, digital := range pou.ISAGraf.Blocks.Items {
+			if digital.ObjectType != "37" {
+				continue
+			}
+			parts := strings.Split(digital.Info, "_")
+			module := contracts.PhysicalModule{Name: parts[len(parts)-2] + "-" + parts[len(parts)-1], Type: "DO32P", ObjectType: "D32V", Capacity: 32}
+			qual := incoming[digital.T11ID+"|sts"]
+			physical := blocks[incoming[qual+"|QUAL"]]
+			match := legacyDOQualityPattern.FindStringSubmatch(cards[physical.Params.CardID].Info)
+			if len(match) != 2 {
+				t.Fatal("missing native channel-zero quality", module.Name)
+			}
+			id, err := strconv.ParseInt(match[1], 10, 64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			module.ID = &id
+			for channel := 0; channel < 32; channel++ {
+				inverse := incoming[fmt.Sprintf("%s|i%02d", digital.T11ID, channel)]
+				if inverse == "" {
+					continue
+				}
+				input := blocks[incoming[inverse+"|0"]]
+				if blocks[inverse].Info != "NOT" || input.Params.ISAObjectID != "-9" {
+					t.Fatal("missing native inversion", module.Name, channel)
+				}
+				module.Channels = append(module.Channels, assignments.Channel{Channel: channel, Tag: input.Info, SourceRow: channel + 1})
+			}
+			modules = append(modules, module)
+		}
+	}
+	sort.Slice(modules, func(i, j int) bool { return modules[i].Name < modules[j].Name })
+	return modules
+}
+
+func TestSKZNativeDOFixtureContract(t *testing.T) {
+	data, err := os.ReadFile("../../tests/fixtures/generator/DO_FBD_example.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The supplied export contains C0 separators in KLPath and mixed-encoding
+	// display labels. Sanitize only the in-memory comparison, never the fixture.
+	clean := strings.Map(func(r rune) rune {
+		if r < 32 && r != '\t' && r != '\r' && r != '\n' {
+			return -1
+		}
+		return r
+	}, strings.ToValidUTF8(string(data), "�"))
+	var native xmlmodel.OutputDocument
+	if err := xml.Unmarshal([]byte(clean), &native); err != nil {
+		t.Fatal(err)
+	}
+	modules := nativeDOGraphModules(t, native)
+	workbook, err := os.ReadFile("../../tests/fixtures/skzmap/do_native.xlsx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := assignments.Parse(workbook)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matched := 0
+	for _, group := range source.Groups {
+		if group.ControllerName != "3000_S_SC_B01" || group.Prefix != "A70" {
+			continue
+		}
+		if len(group.Modules) != len(modules) {
+			t.Fatal("workbook and native A70 module counts differ")
+		}
+		for i, module := range group.Modules {
+			if module.Name != modules[i].Name || len(module.Channels) != len(modules[i].Channels) {
+				t.Fatal("workbook and native module differ", module.Name)
+			}
+			for j, channel := range module.Channels {
+				nativeChannel := modules[i].Channels[j]
+				if channel.Tag != nativeChannel.Tag || channel.Channel != nativeChannel.Channel {
+					t.Fatalf("workbook/native mismatch %s/%d: %s vs %s", module.Name, channel.Channel, channel.Tag, nativeChannel.Tag)
+				}
+				matched++
+			}
+		}
+	}
+	if matched != 382 {
+		t.Fatalf("cross-source native A70 assignments: %d", matched)
+	}
+	plan := contracts.ControllerPlan{ControllerName: "3000_S_SC_B01", Kind: "fbd", DOFBDProfile: planning.LegacyD32CPU850, POUs: []contracts.ModuleGroup{{GroupKey: "native", Name: "DO_A70", Kind: "DO", Prefix: "A70", Modules: modules}}}
+	result, actual := nativeDOGenerate(t, plan)
+	if result.Summary.Blocks != 800 || result.Summary.Links != 788 || result.Summary.Cards != 215 || result.Summary.IOModuleCount != 12 || result.Summary.SignalCount != 382 {
+		t.Fatal(result.Summary)
+	}
+	if !reflect.DeepEqual(modules, nativeDOGraphModules(t, actual)) || !reflect.DeepEqual(native.ISAObjects, actual.ISAObjects) {
+		t.Fatal("generated native topology/types differ")
+	}
+	if !reflect.DeepEqual(native.POUS.Items[0].Params, actual.POUS.Items[0].Params) {
+		t.Fatalf("native POU geometry differs: %+v", actual.POUS.Items[0].Params)
+	}
+	// All native block signatures match, including absence versus empty IV.
+	signatures := func(doc xmlmodel.OutputDocument) map[string]int {
+		result := map[string]int{}
+		for _, pou := range doc.POUS.Items {
+			for _, block := range pou.ISAGraf.Blocks.Items {
+				p := block.Params
+				p.CardID = "owner"
+				if block.ObjectType == "35" || block.ObjectType == "36" {
+					p.CardID = "0"
+				}
+				b, _ := xml.Marshal(p)
+				result[block.ObjectType+string(b)]++
+			}
+		}
+		return result
+	}
+	if !reflect.DeepEqual(signatures(native), signatures(actual)) || bytes.Contains(result.XML, []byte("2202_S_RC_C03")) || !bytes.Contains(result.XML, []byte("_3000_S_SC_B01_A70_02")) {
+		t.Fatal("native signature or PLC owner naming differs")
+	}
+}
+
+func TestSKZNativeDONewWorkbookAllPLCs(t *testing.T) {
+	data, err := os.ReadFile("../../tests/fixtures/skzmap/do_native.xlsx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := assignments.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plans, err := planning.PrepareModulePlans(source, nativeDORequest(source))
+	if err != nil || len(plans) != 2 {
+		t.Fatalf("plans %d: %v", len(plans), err)
+	}
+	modules, mapped, blocks, links := 0, 0, 0, 0
+	for _, plan := range plans {
+		result, doc := nativeDOGenerate(t, plan)
+		modules += result.Summary.IOModuleCount
+		mapped += result.Summary.SignalCount
+		blocks += result.Summary.Blocks
+		links += result.Summary.Links
+		for _, block := range doc.POUS.Items[0].ISAGraf.Blocks.Items {
+			if block.ObjectType == "37" && !strings.HasPrefix(block.Info, "_"+plan.ControllerName+"_") {
+				t.Fatal("wrong PLC instance", block.Info)
+			}
+		}
+		if !bytes.Contains(result.XML, []byte("_IO_I0_DO32P_0_VAL_DIAG")) {
+			t.Fatal("physical IDs may independently restart at zero in each PLC")
+		}
+	}
+	if modules != 60 || mapped != 1692 || blocks != 3564 || links != 3504 {
+		t.Fatalf("%d modules %d mapped %d blocks %d links", modules, mapped, blocks, links)
+	}
+}
+
+func TestSKZNativeDOValidatorRejectsBrokenNativeChains(t *testing.T) {
+	source := skzTestSource()
+	plans, err := planning.PrepareModulePlans(source, nativeDORequest(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _ := nativeDOGenerate(t, plans[0])
+	for _, name := range []string{"not_type", "not_card", "missing_quality_library", "quality_channel", "status_pin", "bypass_not", "missing_link", "duplicate_link", "unknown_card", "physical_iv"} {
+		t.Run(name, func(t *testing.T) {
+			var doc xmlmodel.OutputDocument
+			if err := xml.Unmarshal(result.XML, &doc); err != nil {
+				t.Fatal(err)
+			}
+			pou := &doc.POUS.Items[0]
+			switch name {
+			case "missing_quality_library":
+				doc.ISAObjects.Items = doc.ISAObjects.Items[:1]
+			case "quality_channel":
+				for i := range doc.ISACards.Items {
+					card := &doc.ISACards.Items[i]
+					if strings.Contains(card.Info, "_IO_I0_") {
+						card.Info = strings.Replace(card.Info, "_0_VAL", "_1_VAL", 1)
+						card.Name = card.Info
+						pou.ISAGraf.Blocks.Items[0].Info = card.Info + ".Quality"
+					}
+				}
+			case "status_pin":
+				pou.ISAGraf.Links.Items[1].LastPoint.Last = strings.Replace(pou.ISAGraf.Links.Items[1].LastPoint.Last, "|sts|", "|Stat|", 1)
+			case "bypass_not":
+				pou.ISAGraf.Links.Items[3].FirstPoint = pou.ISAGraf.Links.Items[2].FirstPoint
+			case "missing_link":
+				pou.ISAGraf.Links.Items = pou.ISAGraf.Links.Items[1:]
+			case "duplicate_link":
+				pou.ISAGraf.Links.Items = append(pou.ISAGraf.Links.Items, pou.ISAGraf.Links.Items[0])
+			case "unknown_card":
+				pou.ISAGraf.Blocks.Items[0].Params.CardID = "999999"
+			case "physical_iv":
+				empty := ""
+				pou.ISAGraf.Blocks.Items[0].Params.Initial = &empty
+			default:
+				for i := range pou.ISAGraf.Blocks.Items {
+					block := &pou.ISAGraf.Blocks.Items[i]
+					if block.ObjectType == "35" {
+						if name == "not_type" {
+							block.Params.ISAObjectID = "-9"
+						} else {
+							block.Params.CardID = doc.ISACards.Items[0].ID
+						}
+						break
+					}
+				}
+			}
+			data, err := xmlcodec.SerializeSCADAValue(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			count := len(pou.ISAGraf.Blocks.Items) + len(pou.ISAGraf.Links.Items)
+			if err := validateLegacyD32FBD(data, doc, count); err == nil {
+				t.Fatal("broken native chain accepted")
+			}
+		})
+	}
+}

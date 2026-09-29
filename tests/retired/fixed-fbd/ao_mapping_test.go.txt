@@ -1,0 +1,425 @@
+package fbd
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"scheme-xml-generator/internal/aomap"
+	"scheme-xml-generator/internal/generator/addressing"
+	"scheme-xml-generator/internal/generator/contracts"
+	"scheme-xml-generator/internal/generator/xmlcodec"
+	"scheme-xml-generator/internal/generator/xmlmodel"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+const aoMapTestHeader = "FCS\tMashalling_cabinet\tModule\tChannel\tDCS AO\tMain_module\tRedundant_module\tI/O Type\tТип объекта\n"
+
+func aoMapTestRow(controllerName, module string, channel int, tag string) string {
+	return fmt.Sprintf("%s\tCAB-1\t%s\t%d\t_IO_QU*%s*_%d.ValueDINT := REAL_TO_DINT(%s.OUT, 0.0, 100.0);\t%s\t\tAO\tAN_v1\n", controllerName, module, channel, module, channel, tag, module)
+}
+
+func aoMapSmallPlan(t *testing.T, groups int) *aomap.Plan {
+	t.Helper()
+	source := aoMapTestHeader
+	for i := range groups {
+		source += aoMapTestRow("FCS1", fmt.Sprintf("A%d-00", 11+i), 2, fmt.Sprintf("_TAG%d", i))
+	}
+	plan, err := aomap.Parse([]byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return plan
+}
+
+func aoMapReadFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("..", "..", "XML dev", name))
+	if os.IsNotExist(err) {
+		t.Skipf("development fixture %s not installed", name)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}
+
+func assertAOMapSlotPositions(t *testing.T, pou xmlmodel.OutputPOU, group aomap.Group) map[string]xmlmodel.OutputBlock {
+	t.Helper()
+	byY := map[string]xmlmodel.OutputBlock{}
+	for _, block := range pou.ISAGraf.Blocks.Items {
+		if _, exists := byY[block.Graphics.Y]; exists {
+			t.Fatalf("two blocks occupy Y=%s", block.Graphics.Y)
+		}
+		byY[block.Graphics.Y] = block
+	}
+	count := 0
+	for m, module := range group.Modules {
+		for c, channel := range module.Channels {
+			y := strconv.Itoa(50 + 190*(4*m+c))
+			block, exists := byY[y]
+			if channel.Duplicate {
+				if exists {
+					t.Fatalf("duplicate slot %s/%s/%d contains a block or placeholder: %+v", pou.Name, module.Name, c, block)
+				}
+				continue
+			}
+			count++
+			if !exists || block.Info != channel.Tag || block.Graphics != (xmlmodel.OutputBlockBounds{X: "500", Y: y, Width: "100", Height: "160"}) {
+				t.Fatalf("slot %s/%s/%d changed tag or moved: %+v", pou.Name, module.Name, c, block)
+			}
+		}
+	}
+	if len(byY) != count || len(pou.ISAGraf.Links.Items) != 0 || len(pou.Graphics.Items) != 0 {
+		t.Fatal("unexpected graphic objects or missing owners")
+	}
+	return byY
+}
+
+func TestAOMapActualFileAndNativeProfile(t *testing.T) {
+	plan, err := aomap.Parse(aoMapReadFixture(t, "AO_excell_import_scheme.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan = aomap.SplitByController(plan)[0]
+	req, err := RequirementsForAOMap(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req != (contracts.DocumentRequirements{POUCount: 3, T11Count: 51, CardCount: 51, SignalCount: 80}) {
+		t.Fatalf("actual map requirements = %+v", req)
+	}
+	ids := contracts.IDRange{T11Start: 5000000, CardStart: 900000, POUID: 600000}
+	result, err := (Generator{}).GenerateAOMap(plan, addressing.DefaultAOContext(), ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Summary.POUCount != 3 || result.Summary.Blocks != 51 || result.Summary.Cards != 51 || result.Summary.IOModuleCount != 20 || result.Summary.Links != 0 || result.Summary.Graphics != 0 {
+		t.Fatalf("actual map summary = %+v", result.Summary)
+	}
+	doc := parseGeneratedDocument(t, result.XML)
+	assertDocumentTransportIDs(t, doc, ids.T11Start, 51, ids.CardStart, 51)
+	if len(doc.POUS.Items) != 3 || len(doc.ISACards.Items) != 51 || !reflect.DeepEqual(doc.ISAObjects.Items, []xmlmodel.OutputISAObject{{ID: "888", Info: "AN_v1", LibraryName: "TACSfbl"}}) {
+		t.Fatal("wrong POU/card/native type records")
+	}
+	cards := map[string]xmlmodel.OutputISACard{}
+	for _, card := range doc.ISACards.Items {
+		cards[card.ID] = card
+		if card.IsRetain != "-1" || card.Size != "0" || card.ClusterPath != "" || card.Name != card.Info+" Аналоговая нагрузка" {
+			t.Fatalf("wrong native card: %+v", card)
+		}
+	}
+	for groupIndex, group := range plan.Groups {
+		pou := doc.POUS.Items[groupIndex]
+		if pou.Name != group.POUName || pou.ID != strconv.FormatInt(ids.POUID+int64(groupIndex), 10) || pou.Number != strconv.Itoa(36+groupIndex) {
+			t.Fatalf("wrong POU group %d: %+v", groupIndex, pou)
+		}
+		assertAOMapSlotPositions(t, pou, group)
+		for _, block := range pou.ISAGraf.Blocks.Items {
+			if cards[block.Params.CardID].Info != block.Info {
+				t.Fatalf("block %s references the wrong card", block.Info)
+			}
+			if block.ObjectType != "37" || block.Params.ISAObjectID != "888" || block.Params.CI != "7" || block.Params.CO != "2" || block.Params.Initial == nil || *block.Params.Initial != ",,,100.0" || block.Params.Commented != "false" {
+				t.Fatalf("native AN_v1 form changed: %+v", block)
+			}
+		}
+	}
+	first := assertAOMapSlotPositions(t, doc.POUS.Items[0], plan.Groups[0])
+	if first["50"].Info != "_3107_TV_64101A" || first["810"].Info != "" {
+		t.Fatal("redundant module must leave its repeated technology tag position empty")
+	}
+	if first[strconv.Itoa(50+190*19)].Info != "_3000_D_SC_B01_A11_04_3" {
+		t.Fatal("absent channel must retain a named reserve in its original position")
+	}
+	if bytes.Contains(result.XML, []byte("REAL_TO_DINT")) || bytes.Contains(result.XML, []byte(`GROBJTYPE="38"`)) {
+		t.Fatal("software-only native AO profile must not invent converters or physical bindings")
+	}
+
+	// This export is well-formed UTF-8: parse it strictly without changing or
+	// sanitizing source bytes, so the native comparison remains independent.
+	var native xmlmodel.OutputDocument
+	if err := xml.Unmarshal(aoMapReadFixture(t, "A11_00_example.xml"), &native); err != nil {
+		t.Fatal(err)
+	}
+	if len(native.POUS.Items) != 1 || len(native.POUS.Items[0].ISAGraf.Blocks.Items) != 56 {
+		t.Fatal("unexpected native fixture shape")
+	}
+	if doc.Common != native.Common || doc.POUS.Items[0].Params != native.POUS.Items[0].Params || !reflect.DeepEqual(doc.ISAObjects, native.ISAObjects) {
+		t.Fatal("native import context, page settings, or ISAOBJSINFO differ")
+	}
+	for index, example := range native.POUS.Items[0].ISAGraf.Blocks.Items {
+		block, exists := first[example.Graphics.Y]
+		if !exists {
+			if !plan.Groups[0].Modules[index/4].Channels[index%4].Duplicate {
+				t.Fatalf("nonduplicate native slot %d disappeared", index)
+			}
+			continue
+		}
+		if block.Graphics != example.Graphics || block.ObjectType != example.ObjectType {
+			t.Fatalf("native graphic profile differs at block %d", index)
+		}
+		block.Params.CardID, example.Params.CardID = "", ""
+		if !reflect.DeepEqual(block.Params, example.Params) {
+			t.Fatalf("native Params/IV differ at block %d: got=%+v expected=%+v", index, block.Params, example.Params)
+		}
+	}
+}
+
+func TestAOMapOneControllerPerXMLAndAllSourceSlots(t *testing.T) {
+	plan, err := aomap.Parse(aoMapReadFixture(t, "AO_excell_import_scheme.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RequirementsForAOMap(plan); err == nil || !strings.Contains(err.Error(), "FCS") {
+		t.Fatalf("multi-controller plan must not produce a single XML: %v", err)
+	}
+	parts := aomap.SplitByController(plan)
+	if len(parts) != 8 {
+		t.Fatalf("files=%d", len(parts))
+	}
+	ids := contracts.IDRange{T11Start: 5000000, CardStart: 900000, POUID: 600000}
+	var totals contracts.DocumentRequirements
+	for _, part := range parts {
+		req, err := RequirementsForAOMap(part)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := (Generator{}).GenerateAOMap(part, addressing.DefaultAOContext(), ids)
+		if err != nil {
+			t.Fatal(err)
+		}
+		doc := parseGeneratedDocument(t, result.XML)
+		assertDocumentTransportIDs(t, doc, ids.T11Start, req.T11Count, ids.CardStart, req.CardCount)
+		for i, group := range part.Groups {
+			pou := doc.POUS.Items[i]
+			if group.ControllerName != part.Groups[0].ControllerName || pou.Name != "AO_"+group.Prefix || pou.Number != strconv.Itoa(36+i) {
+				t.Fatalf("wrong POU identity or controller: %+v", pou)
+			}
+			assertAOMapSlotPositions(t, pou, group)
+		}
+		ids.T11Start += int64(req.T11Count)
+		ids.CardStart += int64(req.CardCount)
+		ids.POUID += int64(req.POUCount)
+		totals.T11Count += req.T11Count
+		totals.CardCount += req.CardCount
+		totals.POUCount += req.POUCount
+		totals.SignalCount += req.SignalCount
+	}
+	if totals != (contracts.DocumentRequirements{T11Count: 309, CardCount: 309, POUCount: 21, SignalCount: 512}) {
+		t.Fatalf("partitions lost or duplicated slots: %+v", totals)
+	}
+}
+
+func TestAOMapSamePOUAndTagNamesAreIndependentBetweenControllers(t *testing.T) {
+	plan, err := aomap.Parse([]byte(aoMapTestHeader + aoMapTestRow("FCS1", "A11-00", 0, "_TAG") + aoMapTestRow("FCS2", "A11-00", 0, "_TAG")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := aomap.SplitByController(plan)
+	if len(parts) != 2 {
+		t.Fatal("controllers merged")
+	}
+	for i, part := range parts {
+		result, err := (Generator{}).GenerateAOMap(part, addressing.DefaultAOContext(), contracts.IDRange{T11Start: 1000 + int64(i)*4, CardStart: 2000 + int64(i)*4, POUID: 3000 + int64(i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		doc := parseGeneratedDocument(t, result.XML)
+		if result.Summary.Cards != 4 || doc.POUS.Items[0].Name != "AO_A11" || doc.POUS.Items[0].ISAGraf.Blocks.Items[0].Info != "_TAG" {
+			t.Fatal("controller-local names/card references changed")
+		}
+	}
+}
+
+func TestAOMapDuplicateCallsLeaveHolesAndPreferMainModule(t *testing.T) {
+	row := func(module string) string {
+		return fmt.Sprintf("FCS1\tCAB\t%s\t0\t_IO_QU*%s*_0.ValueDINT := REAL_TO_DINT(_TAG.OUT, 0.0, 100.0);\tA11-01\tA11-00\tAOR(I)\tAN_v1\n", module, module)
+	}
+	plan, err := aomap.Parse([]byte(aoMapTestHeader + row("A11-00") + row("A11-01")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Even stale or absent preview annotations cannot reintroduce duplicate
+	// owners: the generator independently resolves them from source metadata.
+	plan.DuplicateCount = 0
+	plan.Groups[0].Modules[0].Channels[0].Duplicate = false
+	// The discarded ST assignment's range is not translated into an AN block.
+	plan.Groups[0].Modules[0].Channels[0].Max = "200.0"
+	req, err := RequirementsForAOMap(plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req != (contracts.DocumentRequirements{T11Count: 7, CardCount: 7, POUCount: 1, SignalCount: 8}) {
+		t.Fatalf("bad duplicate requirements: %+v", req)
+	}
+	result, err := (Generator{}).GenerateAOMap(plan, addressing.DefaultAOContext(), contracts.IDRange{T11Start: 1000, CardStart: 2000, POUID: 3000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := parseGeneratedDocument(t, result.XML)
+	byY := assertAOMapSlotPositions(t, doc.POUS.Items[0], aomap.ResolveDuplicates(plan).Groups[0])
+	if _, exists := byY["50"]; exists {
+		t.Fatal("redundant call was not an empty slot")
+	}
+	if byY["810"].Info != "_TAG" || byY["240"].Info != "_FCS1_A11_00_1" {
+		t.Fatal("main owner/reserve moved to close the gap")
+	}
+	assertDocumentTransportIDs(t, doc, 1000, 7, 2000, 7)
+	if plan.DuplicateCount != 0 || plan.Groups[0].Modules[0].Channels[0].Duplicate {
+		t.Fatal("generation mutated source plan")
+	}
+	if !strings.Contains(strings.Join(result.Warnings, " "), "пропущено: 1") {
+		t.Fatal("no omission summary")
+	}
+}
+
+func TestAOMapCompletelyRepeatedPOUContainsNoObjects(t *testing.T) {
+	plan := aoMapSmallPlan(t, 2)
+	for groupIndex := range plan.Groups {
+		for channelIndex := range plan.Groups[groupIndex].Modules[0].Channels {
+			channel := &plan.Groups[groupIndex].Modules[0].Channels[channelIndex]
+			channel.Tag = fmt.Sprintf("_SHARED_%d", channelIndex)
+			channel.Reserve = false
+		}
+	}
+	result, err := (Generator{}).GenerateAOMap(plan, addressing.DefaultAOContext(), contracts.IDRange{T11Start: 1000, CardStart: 2000, POUID: 3000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := parseGeneratedDocument(t, result.XML)
+	if result.Summary.SignalCount != 8 || result.Summary.Blocks != 4 || result.Summary.Cards != 4 {
+		t.Fatalf("unexpected summary: %+v", result.Summary)
+	}
+	empty := doc.POUS.Items[1]
+	if len(empty.ISAGraf.Blocks.Items) != 0 || len(empty.ISAGraf.Links.Items) != 0 || len(empty.Graphics.Items) != 0 {
+		t.Fatal("repeated POU contains placeholder graphics")
+	}
+	ps := result.Summary.POUs[1]
+	if ps.Blocks != 0 || ps.Cards != 0 || ps.T11First != 0 || ps.T11Last != 0 || ps.CardFirst != 0 || ps.CardLast != 0 || len(ps.Signals) != 0 {
+		t.Fatalf("empty POU consumed IDs: %+v", ps)
+	}
+	assertDocumentTransportIDs(t, doc, 1000, 4, 2000, 4)
+}
+
+func TestAOMapZeroContextAndLastValidIDs(t *testing.T) {
+	plan := aoMapSmallPlan(t, 1)
+	ctx := addressing.DefaultAOContext()
+	ctx.Version, ctx.ControllerID, ctx.ResourceID, ctx.GroupID, ctx.POUNumber = "0", "0", "0", "0", "0"
+	ids := contracts.IDRange{T11Start: contracts.MaxTransportID - 3, CardStart: contracts.MaxTransportID - 3, POUID: contracts.MaxTransportID}
+	result, err := (Generator{}).GenerateAOMap(plan, ctx, ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := parseGeneratedDocument(t, result.XML)
+	if doc.Common.ControllerID != "0" || doc.Common.ResourceID != "0" || doc.POUS.Items[0].Number != "0" || doc.POUS.Items[0].GroupID != "0" {
+		t.Fatal("explicit zero import context must be preserved")
+	}
+	if result.Summary.T11Last != contracts.MaxTransportID || result.Summary.CardLast != contracts.MaxTransportID || result.Summary.POUID != contracts.MaxTransportID {
+		t.Fatalf("last valid signed 32-bit IDs rejected or changed: %+v", result.Summary)
+	}
+	if doc.POUS.Items[0].ISAGraf.Blocks.Items[2].Info != "_TAG0" || doc.POUS.Items[0].ISAGraf.Blocks.Items[0].Info != "_FCS1_A11_00_0" {
+		t.Fatal("missing channels preceding a real channel must remain reserves")
+	}
+}
+
+func TestAOMapRejectsContextAndRangeOverflow(t *testing.T) {
+	plan := aoMapSmallPlan(t, 2)
+	cases := []struct {
+		name string
+		edit func(*contracts.ProgramContext, *contracts.IDRange)
+		want string
+	}{
+		{"T11 overflow", func(_ *contracts.ProgramContext, ids *contracts.IDRange) {
+			ids.T11Start = contracts.MaxTransportID - 6
+		}, "T11ID"},
+		{"card overflow", func(_ *contracts.ProgramContext, ids *contracts.IDRange) {
+			ids.CardStart = contracts.MaxTransportID - 6
+		}, "cardId"},
+		{"POU overflow", func(_ *contracts.ProgramContext, ids *contracts.IDRange) { ids.POUID = contracts.MaxTransportID }, "POU ID"},
+		{"zero T11", func(_ *contracts.ProgramContext, ids *contracts.IDRange) { ids.T11Start = 0 }, "положительными"},
+		{"negative card", func(_ *contracts.ProgramContext, ids *contracts.IDRange) { ids.CardStart = -1 }, "положительными"},
+		{"zero POU", func(_ *contracts.ProgramContext, ids *contracts.IDRange) { ids.POUID = 0 }, "положительными"},
+		{"POUNum overflow", func(ctx *contracts.ProgramContext, _ *contracts.IDRange) {
+			ctx.POUNumber = strconv.FormatInt(contracts.MaxTransportID, 10)
+		}, "POUNum"},
+		{"controller overflow", func(ctx *contracts.ProgramContext, _ *contracts.IDRange) { ctx.ControllerID = "2147483648" }, "ControllerID"},
+		{"negative resource", func(ctx *contracts.ProgramContext, _ *contracts.IDRange) { ctx.ResourceID = "-1" }, "ResuorceID"},
+		{"fractional group", func(ctx *contracts.ProgramContext, _ *contracts.IDRange) { ctx.GroupID = "1.5" }, "GroupID"},
+		{"control char", func(ctx *contracts.ProgramContext, _ *contracts.IDRange) { ctx.Project = "project\x01" }, "XML"},
+		{"invalid UTF8", func(ctx *contracts.ProgramContext, _ *contracts.IDRange) {
+			ctx.ControllerTypeName = string([]byte{0xff})
+		}, "контекста"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := addressing.DefaultAOContext()
+			ids := contracts.IDRange{T11Start: 1000, CardStart: 2000, POUID: 3000}
+			tc.edit(&ctx, &ids)
+			if _, err := (Generator{}).GenerateAOMap(plan, ctx, ids); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error containing %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestAOMapRejectsMalformedPlanAndUnsupportedRange(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(*aomap.Plan)
+	}{
+		{"no POU", func(plan *aomap.Plan) { plan.Groups = nil }},
+		{"empty POU", func(plan *aomap.Plan) { plan.Groups[0].Modules = nil }},
+		{"invalid POU name", func(plan *aomap.Plan) { plan.Groups[0].POUName = "bad name" }},
+		{"duplicate POU", func(plan *aomap.Plan) { plan.Groups = append(plan.Groups, plan.Groups[0]) }},
+		{"duplicate module", func(plan *aomap.Plan) {
+			group := &plan.Groups[0]
+			group.Modules = append(group.Modules, group.Modules[0])
+		}},
+		{"unsupported type", func(plan *aomap.Plan) { plan.Groups[0].Modules[0].ObjectType = "AD3_v2" }},
+		{"missing channel", func(plan *aomap.Plan) { module := &plan.Groups[0].Modules[0]; module.Channels = module.Channels[:3] }},
+		{"out of order channel", func(plan *aomap.Plan) { plan.Groups[0].Modules[0].Channels[0].Channel = 1 }},
+		{"invalid tag", func(plan *aomap.Plan) { plan.Groups[0].Modules[0].Channels[0].Tag = "_BAD.TAG" }},
+		{"empty tag", func(plan *aomap.Plan) { plan.Groups[0].Modules[0].Channels[0].Tag = "" }},
+		{"minimum unsupported", func(plan *aomap.Plan) { plan.Groups[0].Modules[0].Channels[0].Min = "-1" }},
+		{"maximum unsupported", func(plan *aomap.Plan) { plan.Groups[0].Modules[0].Channels[0].Max = "200" }},
+		{"nan range", func(plan *aomap.Plan) { plan.Groups[0].Modules[0].Channels[0].Min = "NaN" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := aoMapSmallPlan(t, 1)
+			tc.edit(plan)
+			if _, err := RequirementsForAOMap(plan); err == nil {
+				t.Fatal("malformed direct plan accepted")
+			}
+		})
+	}
+	if _, err := RequirementsForAOMap(nil); err == nil {
+		t.Fatal("nil plan accepted")
+	}
+}
+
+func TestAOMapNativeRetainDoesNotRelaxLegacyValidation(t *testing.T) {
+	result, err := (Generator{}).GenerateAOMap(aoMapSmallPlan(t, 1), addressing.DefaultAOContext(), contracts.IDRange{T11Start: 1000, CardStart: 2000, POUID: 3000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := parseGeneratedDocument(t, result.XML)
+	if err := validateGeneratedDocumentForProfile(result.XML, 4, doc, true); err != nil {
+		t.Fatalf("native profile must accept exported AN_v1 retain=-1: %v", err)
+	}
+	if err := validateGeneratedDocumentXML(result.XML, 4, doc); err == nil {
+		t.Fatal("legacy validation must keep rejecting retain=-1 for ordinary AN_v1 cards")
+	}
+	doc.POUS.Items[0].ISAGraf.Blocks.Items[0].Params.CI = "6"
+	changed, err := xmlcodec.SerializeSCADAValue(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateGeneratedDocumentForProfile(changed, 4, doc, true); err == nil {
+		t.Fatal("native exception must not permit an arbitrary AN_v1 block signature")
+	}
+}

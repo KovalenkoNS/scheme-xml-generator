@@ -1,0 +1,89 @@
+/* Вызов библиотеки, её диалог, каталог типов и поиск шаблонов. */
+#library-open {
+  margin-left:auto
+}
+#library-count {
+  font-size:12px;
+  padding-left:8px
+}
+.library-list {
+  list-style:none;
+  margin:0;
+  padding:0
+}
+.dialog-heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between
+}
+.dialog-heading h2 {
+  font-size:23px
+}
+.library-actions {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin:22px 0 16px
+}
+.library-actions span {
+  font-size:12px;
+  color:var(--muted)
+}
+.library-list {
+  margin:0 0 22px
+}
+.library-list li {
+  padding:12px 0;
+  border-bottom:1px solid #edf0f4;
+  display:flex;
+  gap:12px;
+  justify-content:space-between;
+  font-size:13px;
+  overflow-wrap:anywhere
+}
+.library-list small {
+  color:var(--muted);
+  flex-shrink:0
+}
+.library-types {
+  margin-top:15px;
+  max-height:330px;
+  overflow:auto
+}
+.type-item {
+  padding:10px 0;
+  border-top:1px solid #eef1f4
+}
+.type-item strong {
+  font-size:13px
+}
+.type-item small {
+  font-size:11px;
+  color:var(--muted);
+  display:block;
+  margin-top:4px
+}
+.type-item details {
+  margin-top:6px;
+  color:var(--muted);
+  font-size:12px
+}
+.type-item li {
+  margin:5px 0
+}
+@media(max-width:750px) {
+  #library-open {
+    font-size:12px;
+    padding:8px
+  }
+  .library-list li {
+    display:block
+  }
+  .library-list small {
+    display:block;
+    margin-top:5px
+  }
+  .library-actions {
+    flex-wrap:wrap
+  }
+}

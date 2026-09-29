@@ -5,3 +5,6 @@
 
 # Native SKZ FBD export used by generator tests follows the same byte policy.
 internal/generator/testdata/*.xml -text -diff
+
+# Source workbooks are byte-exact parser fixtures, not authored output.
+internal/skzmap/testdata/*.xlsx -text -diff

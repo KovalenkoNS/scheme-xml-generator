@@ -1,0 +1,53 @@
+/* Список сохранённых XML, ошибки отдельных результатов и переход к просмотру. */
+.results ul {
+  list-style:none;
+  margin:0;
+  padding:0
+}
+.results {
+  border:1px solid var(--line);
+  background:white;
+  border-radius:10px;
+  margin-top:28px;
+  padding:22px 24px
+}
+.results li {
+  display:flex;
+  gap:12px;
+  align-items:center;
+  padding:11px 0;
+  border-top:1px solid #edf0f4
+}
+.results a {
+  color:var(--blue);
+  text-decoration:none;
+  overflow-wrap:anywhere
+}
+.results a:hover {
+  text-decoration:underline
+}
+.result-kind {
+  font-size:11px;
+  font-weight:650;
+  min-width:38px;
+  color:var(--muted)
+}
+.result-error {
+  color:var(--error);
+  font-size:13px;
+  line-height:1.6
+}
+.footnote {
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.6;
+  margin:16px 0 0
+}
+@media(max-width:750px) {
+  .results {
+    padding:18px
+  }
+}
+.result-preview {
+  margin-left: auto;
+}

@@ -1,0 +1,44 @@
+/* Общая цветовая тема, типографика и снижение движения; без предметных панелей. */
+:root {
+  font-family:Segoe UI,Arial,sans-serif;
+  color:#1c2b36;
+  background:#f4f6f8;
+  font-synthesis:none;
+  --muted:#63737f;
+  --line:#dce3e8;
+  --blue:#235cd0;
+  --soft:#edf3ff;
+  --error:#aa3434
+}
+* {
+  box-sizing:border-box
+}
+body {
+  margin:0;
+  font-size:14px
+}
+h1 {
+  font-size:30px;
+  font-weight:650;
+  letter-spacing:-.7px;
+  margin:0
+}
+h2 {
+  font-size:16px;
+  margin:0;
+  font-weight:600
+}
+h3 {
+  font-size:14px;
+  margin:0
+}
+@media(max-width:750px) {
+  h1 {
+    font-size:25px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  * {
+    scroll-behavior:auto!important
+  }
+}

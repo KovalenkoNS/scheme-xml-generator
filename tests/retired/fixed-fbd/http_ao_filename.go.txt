@@ -1,0 +1,16 @@
+// Проверка безопасного имени результата предметного HTTP-компонента.
+package fbd
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestAOOutputNameKeepsControllerAndRemovesPaths(t *testing.T) {
+	for _, requested := range []string{"", "../../unsafe.xml", strings.Repeat("long", 70) + ".xml"} {
+		name := aoOutputName(requested, "3000_D_SC_B01")
+		if !strings.HasSuffix(name, "_3000_D_SC_B01.xml") || strings.ContainsAny(name, `/\\`) {
+			t.Fatalf("unsafe or unidentifiable result name %q", name)
+		}
+	}
+}

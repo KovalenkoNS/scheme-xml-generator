@@ -1,0 +1,24 @@
+package fbd
+
+import (
+	"scheme-xml-generator/internal/generator/contracts"
+	"scheme-xml-generator/internal/generator/planning"
+	"scheme-xml-generator/internal/generator/st"
+)
+
+// GenerateModuleMapping is a test-only dispatch seam for historical mixed FBD/ST assertions.
+// It invokes the same planning and subject renderers as the compatibility facade;
+// private FBD validators stay private and no generation algorithm is copied.
+func (g Generator) GenerateModuleMapping(plan contracts.ControllerPlan, ctx contracts.ProgramContext, ids contracts.IDRange) (contracts.Result, error) {
+	ctx, requirements, err := planning.PrepareControllerGeneration(&plan, ctx, ids)
+	if err != nil {
+		return contracts.Result{}, err
+	}
+	if plan.Kind == "st" {
+		return st.GenerateModuleST(plan, ctx, ids)
+	}
+	if plan.DOFBDProfile == planning.LegacyD32CPU850 {
+		return GenerateLegacyD32FBD(plan, ctx, ids, requirements)
+	}
+	return GenerateLegacyModuleFBD(plan, ctx, ids, requirements)
+}

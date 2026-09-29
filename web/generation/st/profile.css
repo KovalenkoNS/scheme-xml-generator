@@ -1,0 +1,5 @@
+/* Поле экспортного профиля ST в настройках перекладок. */
+.profile-row {
+  max-width:370px;
+  margin-bottom:16px
+}

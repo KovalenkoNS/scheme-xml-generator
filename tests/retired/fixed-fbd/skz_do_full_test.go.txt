@@ -1,0 +1,221 @@
+package fbd
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"scheme-xml-generator/internal/generator/addressing"
+	"scheme-xml-generator/internal/generator/contracts"
+	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	"scheme-xml-generator/internal/generator/planning"
+	"scheme-xml-generator/internal/generator/xmlcodec"
+	"scheme-xml-generator/internal/generator/xmlmodel"
+	"scheme-xml-generator/internal/inputs/assignments"
+	"strings"
+	"testing"
+)
+
+func TestSKZDOFullPhysicalChannelsWithMissingTailAndHoles(t *testing.T) {
+	source := &assignments.Plan{Groups: []assignments.Group{{Key: "PLC:DO:A33", ControllerName: "PLC", Kind: "DO", Prefix: "A33", POUName: "DO_A33", Modules: []assignments.Module{
+		{Name: "A33-08", Type: "DO32P", ObjectType: "D32V", Capacity: 32},
+		{Name: "A33-09", Type: "DO32P", ObjectType: "D32V", Capacity: 32, Channels: []assignments.Channel{
+			{Channel: 0, Tag: "_OUTPUT_0_DDVH", SourceRow: 30},
+			{Channel: 17, Tag: "_HOLE_DDVH", SourceRow: 31},
+			{Channel: 31, Tag: "_LAST_DDVH", SourceRow: 32},
+		}},
+	}}}}
+	for channel := 0; channel < 28; channel++ {
+		source.Groups[0].Modules[0].Channels = append(source.Groups[0].Modules[0].Channels, assignments.Channel{Channel: channel, Tag: fmt.Sprintf("_OUTPUT_%d_DDVH", channel), SourceRow: channel + 2})
+	}
+	snapshot := make([][]assignments.Channel, 2)
+	for i, module := range source.Groups[0].Modules {
+		snapshot[i] = append([]assignments.Channel(nil), module.Channels...)
+	}
+	plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, "st"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := plans[0]
+	if plan.SignalCount != 31 || plan.AssignmentCount != 64 || plan.RepeatedAssignmentCount != 1 {
+		t.Fatal("logical mappings and physical assignments must be counted separately", plan)
+	}
+	for _, tc := range []struct{ cpu, profile string }{
+		{cpuprofile.ControllerCPU715, ""}, {cpuprofile.ControllerCPU715, addressing.PhysicalProfileLegacy},
+		{cpuprofile.ControllerCPU850, ""}, {cpuprofile.ControllerCPU850, addressing.PhysicalProfileMeasurement}, {cpuprofile.ControllerCPU850, addressing.PhysicalProfileLegacy},
+	} {
+		t.Run(tc.cpu+"/"+tc.profile, func(t *testing.T) {
+			ctx := addressing.DefaultModuleContext()
+			ctx.ControllerTypeName, ctx.PhysicalProfile = tc.cpu, tc.profile
+			result, err := (Generator{}).GenerateModuleMapping(plan, ctx, contracts.IDRange{POUID: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var document xmlmodel.OutputSTDocument
+			if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, xmlcodec.Utf8BOM), &document); err != nil {
+				t.Fatal(err)
+			}
+			code := document.POUS.Items[0].Code
+			if strings.Count(code, ":=") != 64 || strings.Contains(code, "_DDVH") || result.Summary.SignalCount != 31 || len(result.Summary.POUs[0].Signals) != 31 {
+				t.Fatal("full physical ST must not invent logical signals", code, result.Summary)
+			}
+			for module := 0; module < 2; module++ {
+				if result.Summary.POUs[0].IOModules[module].SignalCount != len(snapshot[module]) {
+					t.Fatal("module summary must retain map signal count")
+				}
+				for channel := 0; channel < 32; channel++ {
+					want := fmt.Sprintf("_IO_QU%d_%d.Value := _PLC_A33_%02d._%02d;", module, channel, module+8, channel)
+					if tc.cpu == cpuprofile.ControllerCPU850 && tc.profile != addressing.PhysicalProfileLegacy {
+						want = fmt.Sprintf("_IO_Q%d_DO32P_%d_VAL.Measurement := _PLC_A33_%02d._%02d;", module, channel, module+8, channel)
+					}
+					if strings.Count(code, want) != 1 {
+						t.Fatal("missing or repeated physical channel", want)
+					}
+				}
+			}
+		})
+	}
+	for i, module := range source.Groups[0].Modules {
+		if !reflect.DeepEqual(module.Channels, snapshot[i]) || !reflect.DeepEqual(plan.POUs[0].Modules[i].Channels, snapshot[i]) {
+			t.Fatal("ST expanded source or snapshot logical channels")
+		}
+	}
+	fbdPlans, err := planning.PrepareModulePlans(source, skzTestRequest(source, "fbd"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fbdPlans[0].SignalCount != 31 || fbdPlans[0].AssignmentCount != 31 || fbdPlans[0].RepeatedAssignmentCount != 1 {
+		t.Fatal("FBD counts changed", fbdPlans[0])
+	}
+	fbd, err := (Generator{}).GenerateModuleMapping(fbdPlans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fbd.Summary.Blocks != 33 || fbd.Summary.Links != 31 || fbd.Summary.Cards != 32 {
+		t.Fatal("invented FBD source references for unconnected channels", fbd.Summary)
+	}
+}
+
+func skzSparseDigitalGroup(scs, kind, prefix string, count int) assignments.Group {
+	group := assignments.Group{Key: scs + ":" + kind + ":" + prefix, ControllerName: scs, Kind: kind, Prefix: prefix, POUName: kind + "_" + prefix}
+	moduleType, member := "DO32P", ""
+	if kind == "DI" {
+		moduleType, member = "DI32", "C1"
+	}
+	for i := 0; i < count; i++ {
+		group.Modules = append(group.Modules, assignments.Module{Name: fmt.Sprintf("%s-%02d", prefix, i), Type: moduleType, ObjectType: "D32V", Capacity: 32,
+			Channels: []assignments.Channel{{Channel: 0, Tag: fmt.Sprintf("_%s_%s_%d", scs, kind, i), Member: member, SourceRow: i + 2}}})
+	}
+	return group
+}
+
+func TestSKZDOFullPhysicalChannelLimitForPreparedAndDirectPlans(t *testing.T) {
+	source := &assignments.Plan{Groups: []assignments.Group{skzSparseDigitalGroup("PLC", "DO", "A33", 128)}}
+	plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, "st"))
+	if err != nil || plans[0].AssignmentCount != 4096 || plans[0].SignalCount != 128 {
+		t.Fatalf("4096 physical channel boundary rejected: %+v, %v", plans, err)
+	}
+	if _, err := (Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100}); err != nil {
+		t.Fatal("boundary generation", err)
+	}
+	source.Groups[0] = skzSparseDigitalGroup("PLC", "DO", "A33", 129)
+	if _, err := planning.PrepareModulePlans(source, skzTestRequest(source, "st")); err == nil {
+		t.Fatal("sparse DO bypassed full physical ST channel limit")
+	}
+	plans, err = planning.PrepareModulePlans(source, skzTestRequest(source, "fbd"))
+	if err != nil || plans[0].SignalCount != 129 || plans[0].AssignmentCount != 129 {
+		t.Fatalf("sparse FBD should remain allowed: %+v, %v", plans, err)
+	}
+	direct := plans[0]
+	direct.Kind, direct.POUs[0].Name = "st", "DO_A33_channels"
+	for i := range direct.POUs[0].Modules {
+		id := int64(i)
+		direct.POUs[0].Modules[i].ID = &id
+	}
+	if _, err := planning.RequirementsForController(direct); err == nil {
+		t.Fatal("direct requirements bypassed physical channel limit")
+	}
+	if _, err := (Generator{}).GenerateModuleMapping(direct, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100}); err == nil {
+		t.Fatal("direct generation bypassed physical channel limit")
+	}
+}
+
+func TestSKZDOAndDIFullPhysicalLimitAcrossPLCs(t *testing.T) {
+	source := &assignments.Plan{Groups: []assignments.Group{
+		skzSparseDigitalGroup("PLC", "DO", "A33", 64),
+		skzSparseDigitalGroup("OTHER", "DI", "A11", 64),
+	}}
+	plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, "st"))
+	if err != nil || len(plans) != 2 {
+		t.Fatalf("global 4096 channel boundary rejected: %+v, %v", plans, err)
+	}
+	if plans[0].AssignmentCount+plans[1].AssignmentCount != 4160 || plans[0].SignalCount+plans[1].SignalCount != 128 {
+		t.Fatal("DI status assignments are not physical channels", plans)
+	}
+	source.Groups[1] = skzSparseDigitalGroup("OTHER", "DI", "A11", 65)
+	if _, err := planning.PrepareModulePlans(source, skzTestRequest(source, "st")); err == nil {
+		t.Fatal("separate PLCs bypassed shared DO+DI physical channel limit")
+	}
+	if _, err := planning.PrepareModulePlans(source, skzTestRequest(source, "fbd")); err != nil {
+		t.Fatal("physical ST limit must not inflate FBD logical channels", err)
+	}
+}
+
+func TestSKZRawWorkbookFullDOPhysicalAssignmentsAndLogicalCounts(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "skzmap", "di.xlsx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := assignments.Parse(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"st", "fbd"} {
+		t.Run(kind, func(t *testing.T) {
+			plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind))
+			if err != nil {
+				t.Fatal(err)
+			}
+			modules, signals, assignments, repeats, doAssignments, diAssignments := 0, 0, 0, 0, 0, 0
+			for _, plan := range plans {
+				modules += plan.ModuleCount
+				signals += plan.SignalCount
+				assignments += plan.AssignmentCount
+				repeats += plan.RepeatedAssignmentCount
+				result, err := (Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100000, T11Start: 200000, CardStart: 300000})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if kind == "st" {
+					var document xmlmodel.OutputSTDocument
+					if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, xmlcodec.Utf8BOM), &document); err != nil {
+						t.Fatal(err)
+					}
+					for i, pou := range document.POUS.Items {
+						count := strings.Count(pou.Code, ":=")
+						if plan.POUs[i].Kind == "DO" {
+							doAssignments += count
+							if count != len(plan.POUs[i].Modules)*32 {
+								t.Fatal("DO POU is not fully mapped", pou.Name, count)
+							}
+						} else {
+							diAssignments += count
+						}
+					}
+				}
+			}
+			wantAssignments := 3598
+			if kind == "st" {
+				wantAssignments = 3954
+				if doAssignments != 2304 || diAssignments != 1650 {
+					t.Fatal("physical ST totals", doAssignments, diAssignments)
+				}
+			}
+			if len(plans) != 3 || modules != 122 || signals != 3184 || assignments != wantAssignments || repeats != 1461 {
+				t.Fatal("raw workbook counts", len(plans), modules, signals, assignments, repeats)
+			}
+		})
+	}
+}

@@ -1,0 +1,23 @@
+/* Выбор библиотечного FBD-шаблона и переключателя инверсии его сигналов. */
+.template-row {
+  display:grid;
+  grid-template-columns:48px minmax(180px,1fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:10px 0;
+  border-top:1px solid #edf0f4
+}
+.template-row:first-of-type {
+  border:0
+}
+.template-row strong {
+  font-size:12px
+}
+@media(max-width:750px) {
+  .template-row {
+    grid-template-columns:28px 1fr
+  }
+  .template-row .check-label {
+    grid-column:2
+  }
+}

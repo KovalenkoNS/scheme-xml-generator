@@ -1,0 +1,20 @@
+{
+  "project": "github/spec-kit",
+  "version": "1.0.12",
+  "tag": "v1.0.12",
+  "commit": "e77daa9021d20db26b878f7dfa5640fe5a42d04e",
+  "integration": "codex",
+  "script": "ps",
+  "source": "https://github.com/github/spec-kit/tree/v1.0.12",
+  "local_additions": [
+    "templates/verification-template.md",
+    "../scripts/sdd.cjs"
+  ],
+  "installed": "2026-09-28",
+  "local_patches": [
+    {
+      "file": "scripts/powershell/common.ps1",
+      "reason": "Use UTF-8 console output to prevent invalid JSON (0x1A for Unicode arrows) in Windows PowerShell 5.1."
+    }
+  ]
+}

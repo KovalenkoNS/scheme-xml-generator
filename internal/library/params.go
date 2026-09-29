@@ -1,3 +1,4 @@
+// Текстовые параметры и геометрические координаты примитивов библиотеки.
 package library
 
 import (
@@ -17,6 +18,8 @@ type Point struct {
 	Y int `json:"y"`
 }
 
+// ParseParams разбирает текстовые параметры примитива библиотеки в словарь ключей.
+// Читает строки [KEY]=value и сохраняет многострочные продолжения после нормализации CRLF.
 func ParseParams(raw string) map[string]string {
 	result := make(map[string]string)
 	raw = strings.ReplaceAll(raw, "\r\n", "\n")
@@ -36,6 +39,8 @@ func ParseParams(raw string) map[string]string {
 	return result
 }
 
+// ReplaceParam обновляет один параметр клонированного библиотечного примитива при генерации.
+// Заменяет первую строку указанного ключа либо добавляет новую, возвращая текст с LF-разделителями.
 func ReplaceParam(raw, key, value string) string {
 	raw = strings.ReplaceAll(raw, "\r\n", "\n")
 	lines := strings.Split(raw, "\n")
@@ -52,6 +57,8 @@ func ReplaceParam(raw, key, value string) string {
 	return raw + "\n" + prefix + value
 }
 
+// ParsePoints разбирает список координат связи или графического примитива библиотеки.
+// Возвращает пары целых X/Y; пустой список или числовое переполнение возвращает как ошибку.
 func ParsePoints(raw string) ([]Point, error) {
 	matches := pointPattern.FindAllStringSubmatch(raw, -1)
 	if len(matches) == 0 {
@@ -72,6 +79,8 @@ func ParsePoints(raw string) ([]Point, error) {
 	return points, nil
 }
 
+// ShiftPoints смещает координаты библиотечной полилинии при размещении экземпляра.
+// Возвращает исходный формат с заменёнными парами (x+dx,y+dy), сохраняя прочий текст и сообщая ошибку чисел.
 func ShiftPoints(raw string, dx, dy int) (string, error) {
 	if len(pointPattern.FindAllStringIndex(raw, -1)) == 0 {
 		return "", fmt.Errorf("список точек пуст: %q", raw)
@@ -97,6 +106,8 @@ func ShiftPoints(raw string, dx, dy int) (string, error) {
 	return shifted, nil
 }
 
+// Int читает числовые XML-атрибуты библиотечного шаблона с явным запасным значением.
+// Возвращает int после TrimSpace либо fallback при недопустимой строке.
 func Int(value string, fallback int) int {
 	parsed, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil {

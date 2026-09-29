@@ -1,0 +1,100 @@
+/* Оболочка двух страниц: навигация, заголовок, область содержимого и статус приложения. */
+.app-header {
+  min-height:72px;
+  padding:0 max(26px,calc((100vw - 1120px)/2));
+  display:flex;
+  align-items:center;
+  gap:48px;
+  border-bottom:1px solid var(--line);
+  background:white
+}
+.brand {
+  display:flex;
+  align-items:center;
+  gap:11px;
+  color:#203347;
+  text-decoration:none;
+  font-weight:650;
+  white-space:nowrap
+}
+.brand-mark {
+  display:grid;
+  place-items:center;
+  color:var(--blue);
+  background:var(--soft);
+  height:33px;
+  width:37px;
+  border-radius:8px;
+  font-family:Consolas,monospace;
+  font-size:16px
+}
+.app-header nav {
+  display:flex;
+  gap:28px;
+  align-self:stretch;
+  align-items:stretch
+}
+.app-header nav a {
+  display:flex;
+  align-items:center;
+  text-decoration:none;
+  color:var(--muted);
+  border-bottom:2px solid transparent;
+  padding:0 1px;
+  white-space:nowrap
+}
+.app-header nav a[aria-current=page] {
+  color:var(--blue);
+  border-color:var(--blue);
+  font-weight:600
+}
+main {
+  max-width:1040px;
+  margin:0 auto;
+  padding:38px 28px 50px
+}
+.page-heading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:27px
+}
+.eyebrow {
+  font-size:10px;
+  letter-spacing:1.7px;
+  color:var(--muted);
+  font-weight:650;
+  margin:0 0 8px
+}
+.status {
+  font-size:12px;
+  line-height:1.6;
+  color:var(--muted);
+  min-height:18px;
+  margin-top:15px
+}
+@media(max-width:750px) {
+  .app-header {
+    gap:16px;
+    flex-wrap:wrap;
+    padding:14px 18px;
+    min-height:90px
+  }
+  .brand {
+    font-size:13px
+  }
+  .app-header nav {
+    order:3;
+    width:100%;
+    gap:24px;
+    height:32px;
+    font-size:13px
+  }
+  main {
+    padding:26px 18px
+  }
+  .page-heading {
+    align-items:flex-start
+  }
+}

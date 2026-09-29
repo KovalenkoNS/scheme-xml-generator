@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="510" viewBox="0 0 1200 510" role="img" aria-labelledby="title desc">
+  <title id="title">РСУ, ПАЗ и СОГО — непересекающиеся области ПЛК</title>
+  <desc id="desc">Три непересекающихся круга. Внутри каждой области показаны отдельные ПЛК моделей 715 и 850, у каждого собственные ST, FBD, HMI. Состав условный; каждый ПЛК принадлежит ровно одной области.</desc>
+  <rect width="1200" height="510" fill="#f8fafc" rx="18"/>
+  <g font-family="Segoe UI, Arial, sans-serif" fill="#0f172a" text-anchor="middle">
+    <text x="600" y="43" font-size="25" font-weight="600">Области SCADA-проекта</text>
+    <text x="600" y="74" font-size="17" fill="#475569">Каждый ПЛК принадлежит ровно одной области</text>
+    <circle cx="210" cy="280" r="174" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+    <circle cx="600" cy="280" r="174" fill="#f0fdf4" stroke="#16a34a" stroke-width="2"/>
+    <circle cx="990" cy="280" r="174" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+    <g font-size="26" font-weight="600">
+      <text x="210" y="172">РСУ</text><text x="600" y="172">ПАЗ</text><text x="990" y="172">СОГО</text>
+    </g>
+    <g fill="white" stroke="#64748b" stroke-width="1.5">
+      <circle cx="136" cy="285" r="65"/><circle cx="284" cy="285" r="65"/>
+      <circle cx="526" cy="285" r="65"/><circle cx="674" cy="285" r="65"/>
+      <circle cx="916" cy="285" r="65"/><circle cx="1064" cy="285" r="65"/>
+    </g>
+    <g font-size="17" font-weight="600">
+      <text x="136" y="267">ПЛК 1</text><text x="284" y="267">ПЛК 2</text>
+      <text x="526" y="267">ПЛК 3</text><text x="674" y="267">ПЛК 4</text>
+      <text x="916" y="267">ПЛК 5</text><text x="1064" y="267">ПЛК 6</text>
+    </g>
+    <g font-size="15" fill="#475569">
+      <text x="136" y="291">715</text><text x="284" y="291">850</text>
+      <text x="526" y="291">715</text><text x="674" y="291">850</text>
+      <text x="916" y="291">715</text><text x="1064" y="291">850</text>
+    </g>
+    <g font-size="13">
+      <text x="136" y="318">ST · FBD · HMI</text><text x="284" y="318">ST · FBD · HMI</text>
+      <text x="526" y="318">ST · FBD · HMI</text><text x="674" y="318">ST · FBD · HMI</text>
+      <text x="916" y="318">ST · FBD · HMI</text><text x="1064" y="318">ST · FBD · HMI</text>
+    </g>
+    <text x="600" y="489" font-size="15" fill="#475569">Состав показан для примера. Модель 715/850 не определяет область.</text>
+  </g>
+</svg>

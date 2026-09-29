@@ -1,3 +1,4 @@
+// Границы фактической геометрии библиотечного шаблона до смещения экземпляра.
 package library
 
 import "strings"
@@ -12,14 +13,16 @@ type LayoutBounds struct {
 	MaxY int `json:"maxY"`
 }
 
-// TemplateLayoutBounds calculates one authoritative geometry model used by
-// the catalog, browser auto-placement and XML page sizing.
+// TemplateLayoutBounds вычисляет реальные границы содержимого библиотечного шаблона для размещения.
+// Учитывает блоки, графику и PointList; при пустом содержимом возвращает заявленные размеры шаблона.
 func TemplateLayoutBounds(template *Template) LayoutBounds {
 	if template == nil {
 		return LayoutBounds{}
 	}
 	bounds := LayoutBounds{}
 	hasContent := false
+	// Добавляет координату в общие границы содержимого; вызывается для блоков и PointList.
+	// Изменяет bounds и отмечает наличие фактической геометрии шаблона.
 	includePoint := func(x, y int) {
 		hasContent = true
 		bounds.MinX = min(bounds.MinX, x)
@@ -27,6 +30,8 @@ func TemplateLayoutBounds(template *Template) LayoutBounds {
 		bounds.MaxX = max(bounds.MaxX, x)
 		bounds.MaxY = max(bounds.MaxY, y)
 	}
+	// Включает оба угла графического объекта в итоговые границы шаблона.
+	// Использует ширину/высоту из XML и общий аккумулятор includePoint.
 	includeRectangle := func(x, y, width, height int) {
 		includePoint(x, y)
 		includePoint(x+width, y+height)

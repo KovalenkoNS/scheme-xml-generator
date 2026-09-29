@@ -9,6 +9,8 @@ import (
 	"io"
 	"math"
 	"regexp"
+	"scheme-xml-generator/internal/domain/analogoutput"
+	"scheme-xml-generator/internal/domain/hardware"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,51 +19,10 @@ import (
 	"unicode/utf8"
 )
 
-// Plan contains only validated assignments. Every module has channels 0 through
-// 3, including named reserves for channels absent from the source map. Repeated
-// object calls stay in these positions but are annotated as empty graphic slots.
-type Plan struct {
-	Groups         []Group  `json:"groups"`
-	RowCount       int      `json:"rowCount"`
-	GroupCount     int      `json:"groupCount"`
-	FCSCount       int      `json:"fcsCount"`
-	ModuleCount    int      `json:"moduleCount"`
-	ChannelCount   int      `json:"channelCount"`
-	ReserveCount   int      `json:"reserveCount"`
-	UniqueTagCount int      `json:"uniqueTagCount"`
-	DuplicateCount int      `json:"duplicateCount"`
-	Warnings       []string `json:"warnings"`
-}
-
-type Group struct {
-	Key     string   `json:"key"`
-	FCS     string   `json:"fcs"`
-	Prefix  string   `json:"prefix"`
-	POUName string   `json:"pouName"`
-	Modules []Module `json:"modules"`
-}
-
-type Module struct {
-	Name               string    `json:"name"`
-	MainModule         string    `json:"mainModule"`
-	RedundantModule    string    `json:"redundantModule"`
-	IOType             string    `json:"ioType"`
-	ObjectType         string    `json:"objectType"`
-	MarshallingCabinet string    `json:"marshallingCabinet"`
-	SourceRow          int       `json:"sourceRow"`
-	Channels           []Channel `json:"channels"`
-}
-
-type Channel struct {
-	Channel     int    `json:"channel"`
-	SourceRow   int    `json:"sourceRow"`
-	Tag         string `json:"tag"`
-	Reserve     bool   `json:"reserve"`
-	Min         string `json:"min"`
-	Max         string `json:"max"`
-	Duplicate   bool   `json:"duplicate"`
-	DuplicateOf string `json:"duplicateOf,omitempty"`
-}
+type Plan = analogoutput.Plan
+type Group = analogoutput.Group
+type Module = analogoutput.Module
+type Channel = analogoutput.Channel
 
 var (
 	modulePattern     = regexp.MustCompile(`^A([0-9]{1,6})[-_]([0-9]{1,6})$`)
@@ -166,8 +127,8 @@ func Parse(data []byte) (*Plan, error) {
 			return nil, rowError(row, "тип объекта %q не поддерживается; ожидается AN_v1", field("object_type"))
 		}
 		channel, err := strconv.Atoi(field("channel"))
-		if err != nil || channel < 0 || channel > 3 {
-			return nil, rowError(row, "канал %q вне диапазона 0–3", field("channel"))
+		if err != nil || channel < 0 || channel >= hardware.AOC4HChannels {
+			return nil, rowError(row, "канал %q вне диапазона 0–%d", field("channel"), hardware.AOC4HChannels-1)
 		}
 		match := assignmentPattern.FindStringSubmatch(field("dcs ao"))
 		if match == nil {
@@ -188,7 +149,7 @@ func Parse(data []byte) (*Plan, error) {
 		metadata := Module{Name: name, MainModule: main, RedundantModule: redundant, IOType: ioType, ObjectType: "AN_v1", MarshallingCabinet: field("cabinet"), SourceRow: row}
 		entry := modules[moduleKey]
 		if entry == nil {
-			metadata.Channels = make([]Channel, 4)
+			metadata.Channels = make([]Channel, hardware.AOC4HChannels)
 			for n := range metadata.Channels {
 				metadata.Channels[n] = Channel{Channel: n, Tag: reserveTag(fcs, name, n), Reserve: true, Min: "0.0", Max: "100.0"}
 			}
@@ -208,7 +169,7 @@ func Parse(data []byte) (*Plan, error) {
 		entry.seen[channel] = fingerprint
 		entry.module.Channels[channel] = Channel{Channel: channel, SourceRow: row, Tag: match[3], Reserve: strings.EqualFold(match[3], reserveTag(fcs, name, channel)), Min: match[4], Max: match[5]}
 		if groups[groupKey] == nil {
-			groups[groupKey] = &Group{Key: groupKey, FCS: fcs, Prefix: prefix, POUName: "AO_" + prefix, Modules: []Module{}}
+			groups[groupKey] = &Group{Key: groupKey, ControllerName: fcs, Prefix: prefix, POUName: "AO_" + prefix, Modules: []Module{}}
 		}
 	}
 	if len(modules) == 0 {
@@ -241,8 +202,8 @@ func Parse(data []byte) (*Plan, error) {
 		plan.Groups = append(plan.Groups, *group)
 	}
 	sort.Slice(plan.Groups, func(i, j int) bool {
-		if plan.Groups[i].FCS != plan.Groups[j].FCS {
-			return plan.Groups[i].FCS < plan.Groups[j].FCS
+		if plan.Groups[i].ControllerName != plan.Groups[j].ControllerName {
+			return plan.Groups[i].ControllerName < plan.Groups[j].ControllerName
 		}
 		iPrefix, _ := strconv.Atoi(strings.TrimPrefix(plan.Groups[i].Prefix, "A"))
 		jPrefix, _ := strconv.Atoi(strings.TrimPrefix(plan.Groups[j].Prefix, "A"))
@@ -250,154 +211,23 @@ func Parse(data []byte) (*Plan, error) {
 	})
 	plan.ModuleCount = len(modules)
 	plan.GroupCount = len(plan.Groups)
-	fcsNames := map[string]bool{}
+	controllerNames := map[string]bool{}
 	for _, group := range plan.Groups {
-		fcsNames[group.FCS] = true
+		controllerNames[group.ControllerName] = true
 	}
-	plan.FCSCount = len(fcsNames)
+	plan.ControllerCount = len(controllerNames)
 	plan.UniqueTagCount = len(uniqueTags)
 	return ResolveDuplicates(plan), nil
 }
 
-// SplitByFCS partitions a validated map without changing its groups, positions,
-// source tags, or ordering. A BufScadaPOUS document has one Common context, so
-// each returned plan belongs to one controller. Returned plans own their slices.
-// RowCount here counts retained source assignments (not duplicate rows).
-func SplitByFCS(plan *Plan) []*Plan {
-	if plan == nil {
-		return nil
-	}
-	parts := []*Plan{}
-	byFCS := map[string]*Plan{}
-	for _, group := range plan.Groups {
-		part := byFCS[group.FCS]
-		if part == nil {
-			part = &Plan{FCSCount: 1, Warnings: []string{}}
-			byFCS[group.FCS] = part
-			parts = append(parts, part)
-		}
-		part.Groups = append(part.Groups, group)
-	}
-	for i, part := range parts {
-		tags := map[string]bool{}
-		part.GroupCount = len(part.Groups)
-		for _, group := range part.Groups {
-			part.ModuleCount += len(group.Modules)
-			for _, module := range group.Modules {
-				for _, channel := range module.Channels {
-					part.ChannelCount++
-					if channel.SourceRow > 0 {
-						part.RowCount++
-					}
-					if channel.Reserve {
-						part.ReserveCount++
-					} else {
-						tags[strings.ToUpper(channel.Tag)] = true
-					}
-				}
-			}
-		}
-		part.UniqueTagCount = len(tags)
-		parts[i] = ResolveDuplicates(part)
-	}
-	return parts
-}
+// SplitByController передаёт разобранную AO-карту предметной модели для разделения по ПЛК.
+// Возвращает независимые планы, сохраняя назначения исходного текстового формата.
+func SplitByController(plan *Plan) []*Plan { return analogoutput.SplitByController(plan) }
 
-// ResolveDuplicates returns an independent copy whose repeated tag positions
-// are marked as empty graphical slots. The source assignments are not changed:
-// duplicate channels still retain their tags, ranges, and source rows for audit.
-// A tag has one owner per FCS (case-insensitive tag identity). An assignment in
-// its main module wins; otherwise the first numeric POU/module/channel position
-// wins. Input row order and existing annotations never affect this decision.
-func ResolveDuplicates(plan *Plan) *Plan {
-	if plan == nil {
-		return nil
-	}
-	result := *plan
-	if plan.Groups != nil {
-		result.Groups = append([]Group{}, plan.Groups...)
-	}
-	if plan.Warnings != nil {
-		result.Warnings = append([]string{}, plan.Warnings...)
-	}
-	result.DuplicateCount = 0
-	type position struct {
-		group, module, channel int
-	}
-	owners := map[string]position{}
-	positions := []position{}
-	precedes := func(left, right position) bool {
-		lg, rg := result.Groups[left.group], result.Groups[right.group]
-		lm, rm := lg.Modules[left.module], rg.Modules[right.module]
-		lc, rc := lm.Channels[left.channel], rm.Channels[right.channel]
-		leftMain := strings.EqualFold(lm.Name, lm.MainModule)
-		rightMain := strings.EqualFold(rm.Name, rm.MainModule)
-		if leftMain != rightMain {
-			return leftMain
-		}
-		lp, le := strconv.Atoi(strings.TrimPrefix(strings.ToUpper(lg.Prefix), "A"))
-		rp, re := strconv.Atoi(strings.TrimPrefix(strings.ToUpper(rg.Prefix), "A"))
-		if le == nil && re == nil && lp != rp {
-			return lp < rp
-		}
-		if lg.POUName != rg.POUName {
-			return lg.POUName < rg.POUName
-		}
-		if ln, rn := moduleNumber(lm.Name), moduleNumber(rm.Name); ln != rn {
-			return ln < rn
-		}
-		if lm.Name != rm.Name {
-			return lm.Name < rm.Name
-		}
-		if lc.Channel != rc.Channel {
-			return lc.Channel < rc.Channel
-		}
-		if left.group != right.group {
-			return left.group < right.group
-		}
-		if left.module != right.module {
-			return left.module < right.module
-		}
-		return left.channel < right.channel
-	}
-	for gi := range result.Groups {
-		group := &result.Groups[gi]
-		group.Modules = append([]Module(nil), group.Modules...)
-		for mi := range group.Modules {
-			module := &group.Modules[mi]
-			module.Channels = append([]Channel(nil), module.Channels...)
-			for ci := range module.Channels {
-				channel := &module.Channels[ci]
-				channel.Duplicate, channel.DuplicateOf = false, ""
-				if channel.Tag == "" {
-					continue
-				}
-				at := position{gi, mi, ci}
-				positions = append(positions, at)
-				key := group.FCS + ":" + strings.ToUpper(channel.Tag)
-				owner, exists := owners[key]
-				if !exists || precedes(at, owner) {
-					owners[key] = at
-				}
-			}
-		}
-	}
-	for _, at := range positions {
-		group := &result.Groups[at.group]
-		channel := &group.Modules[at.module].Channels[at.channel]
-		owner := owners[group.FCS+":"+strings.ToUpper(channel.Tag)]
-		if at == owner {
-			continue
-		}
-		ownerGroup := &result.Groups[owner.group]
-		ownerModule := &ownerGroup.Modules[owner.module]
-		channel.Duplicate = true
-		channel.DuplicateOf = fmt.Sprintf("%s/%s/%d", ownerGroup.POUName, ownerModule.Name, ownerModule.Channels[owner.channel].Channel)
-		result.DuplicateCount++
-	}
-	return &result
-}
+// ResolveDuplicates delegates repeated-tag ownership to the format-independent AO model.
+func ResolveDuplicates(plan *Plan) *Plan { return analogoutput.ResolveDuplicates(plan) }
 
+// readHeader Проверяет столбцы экспортированной AO-таблицы и возвращает их позиции для чтения строк.
 func readHeader(header []string) (map[string]int, error) {
 	columns := map[string]int{}
 	for i, name := range header {
@@ -424,6 +254,7 @@ func readHeader(header []string) (map[string]int, error) {
 	return columns, nil
 }
 
+// normalizeModule Приводит имя модуля из AO-таблицы к форме Axx_nn и извлекает группу; аппаратный ID не назначает.
 func normalizeModule(value string) (name, prefix string, err error) {
 	match := modulePattern.FindStringSubmatch(strings.ToUpper(value))
 	if match == nil {
@@ -435,20 +266,24 @@ func normalizeModule(value string) (name, prefix string, err error) {
 	return fmt.Sprintf("%s_%02d", prefix, number), prefix, nil
 }
 
+// moduleNumber Извлекает номер нормализованного AO-модуля для упорядочения строк исходной карты.
 func moduleNumber(name string) int {
 	_, suffix, _ := strings.Cut(name, "_")
 	number, _ := strconv.Atoi(suffix)
 	return number
 }
 
+// reserveTag Создаёт имя свободного AO-канала из ПЛК, модуля и номера, сохраняя его место в карте.
 func reserveTag(fcs, module string, channel int) string {
 	return fmt.Sprintf("_%s_%s_%d", fcs, module, channel)
 }
 
+// rowError Добавляет номер исходной строки к ошибке AO-парсера для исправления таблицы пользователем.
 func rowError(row int, format string, args ...any) error {
 	return fmt.Errorf("строка %d: %s", row, fmt.Sprintf(format, args...))
 }
 
+// decodeText Декодирует байты AO-таблицы из UTF-8/UTF-16/Windows-1251, возвращая текст и предупреждение о кодировке.
 func decodeText(data []byte) (string, string, error) {
 	if bytes.HasPrefix(data, []byte{0xef, 0xbb, 0xbf}) {
 		data = data[3:]

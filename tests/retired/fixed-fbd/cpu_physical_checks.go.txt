@@ -1,0 +1,39 @@
+func TestLibraryPhysicalControllerCapabilities(t *testing.T) {
+	for _, cpu := range []string{cpuprofile.ControllerCPU715, cpuprofile.ControllerCPU850} {
+		for _, kind := range []string{ioTypeAI, ioTypeAO, ioTypeDI, ioTypeDO} {
+			err := validateLibraryIOController(cpu, []contracts.ResolvedPOU{{Request: contracts.POURequest{IO: &contracts.IORequest{Type: kind}}}})
+			wantError := cpu == cpuprofile.ControllerCPU850 && kind != ioTypeAI
+			if (err != nil) != wantError {
+				t.Fatalf("cpu=%s kind=%s error=%v", cpu, kind, err)
+			}
+		}
+		if err := validateLibraryIOController(cpu, []contracts.ResolvedPOU{{Request: contracts.POURequest{Name: "FLAT"}}}); err != nil {
+			t.Fatalf("software FBD should not need a physical profile: %v", err)
+		}
+	}
+}
+
+func TestLibraryAI850PreservesNativeLegacyDriver(t *testing.T) {
+	ref := loadAD3V2Template(t)
+	moduleID := int64(0)
+	resolved := resolvedIOPOU(contracts.POURequest{
+		Name: "AI_CPU850", DefaultTemplateKey: ref.Key,
+		IO: &contracts.IORequest{Type: ioTypeAI, Modules: []contracts.IOModuleRequest{{
+			ID: &moduleID, Signals: []contracts.SignalRequest{{ObjectName: "_AI_CPU850", NameMode: "base"}},
+		}}},
+	}, ref)
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(
+		contracts.Request{Context: &contracts.GenerationContext{ControllerTypeName: cpuprofile.ControllerCPU850}},
+		[]contracts.ResolvedPOU{resolved}, contracts.IDRange{T11Start: 4500000, CardStart: 950000, POUID: 250000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{`ControllerTypeName="TENIX-CPU850"`, `Info="_IO_IU0_0"`, `.ValueDINT`, `.Status`} {
+		if !bytes.Contains(result.XML, []byte(expected)) {
+			t.Fatalf("missing native legacy AI binding %s", expected)
+		}
+	}
+	if bytes.Contains(result.XML, []byte("_VAL.Measurement")) {
+		t.Fatal("CPU selection must not silently change the library physical driver")
+	}
+}

@@ -1,0 +1,42 @@
+profiles := []struct {
+		ioType     string
+		templateID string
+	}{
+		{ioType: ioTypeAI, templateID: "17510"},
+		{ioType: ioTypeAO, templateID: "17625"},
+		{ioType: ioTypeDI, templateID: "18442"},
+		{ioType: ioTypeDO, templateID: "18714"},
+	}
+	resolved := make([]contracts.ResolvedPOU, 0, len(profiles))
+	for index, profile := range profiles {
+		ref := physicalTemplates[profile.templateID]
+		if ref == nil {
+			t.Fatalf("physical %s template ID=%s not found in %s", profile.ioType, profile.templateID, targetFile)
+		}
+		moduleID := int64(index)
+		request := contracts.POURequest{
+			Name:               "PHYSICAL_" + profile.ioType,
+			DefaultTemplateKey: ref.Key,
+			IO: &contracts.IORequest{Type: profile.ioType, Modules: []contracts.IOModuleRequest{{
+				ID:            &moduleID,
+				BindingPrefix: fmt.Sprintf("_IO_SMOKE_%s", profile.ioType),
+				InstanceName:  fmt.Sprintf("_IO_%s_%d", profile.ioType, index),
+				Signals: []contracts.SignalRequest{{
+					ObjectName: fmt.Sprintf("_PHYSICAL_%s_SIGNAL", profile.ioType),
+					NameMode:   "base",
+				}},
+			}}},
+		}
+		resolved = append(resolved, resolvedIOPOU(request, ref))
+	}
+	physical, err := (Generator{Config: config.Default()}).GenerateDocument(
+		contracts.Request{}, resolved,
+		contracts.IDRange{T11Start: nextT11, CardStart: nextCard, POUID: nextPOU},
+	)
+	if err != nil {
+		t.Fatalf("physical AI/AO/DI/DO document from %s: %v", targetFile, err)
+	}
+	if physical.Summary.POUCount != 4 || physical.Summary.SignalCount != 4 || physical.Summary.IOModuleCount != 4 {
+		t.Fatalf("physical document summary=%+v", physical.Summary)
+	}
+}

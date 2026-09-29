@@ -1,25 +1,28 @@
+// Сборка зависимостей генератора, запуск HTTP и остановка процесса.
 package main
 
 import (
 	"context"
+	"scheme-xml-generator/internal/appserver"
+	"scheme-xml-generator/internal/config"
+
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
-	"os/signal"
 	"path/filepath"
-	"runtime"
-	"scheme-xml-generator/internal/appserver"
-	"scheme-xml-generator/internal/config"
 	"scheme-xml-generator/internal/generator"
 	"scheme-xml-generator/internal/library"
+
+	"os/signal"
 	webui "scheme-xml-generator/web"
 	"syscall"
 	"time"
 )
 
+// main запускает независимый генератор с локальными настройками, библиотекой и HTTP-интерфейсом.
+// Собирает зависимости, открывает браузер при настройке AutoOpen и завершает сервер по сигналу ОС.
 func main() {
 	rootOption := flag.String("root", "", "application data directory")
 	portOption := flag.Int("port", 0, "override HTTP port")
@@ -96,37 +99,4 @@ func main() {
 	shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = appserver.Shutdown(shutdown, httpServer)
-}
-
-func applicationRoot(option string) (string, error) {
-	if option != "" {
-		return filepath.Abs(option)
-	}
-	if value := os.Getenv("SCHEME_XML_GENERATOR_HOME"); value != "" {
-		return filepath.Abs(value)
-	}
-	cwd, err := os.Getwd()
-	if err == nil {
-		if _, statErr := os.Stat(filepath.Join(cwd, "libraries")); statErr == nil {
-			return cwd, nil
-		}
-	}
-	executable, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Dir(executable), nil
-}
-
-func openBrowser(address string) error {
-	var command *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", address)
-	case "darwin":
-		command = exec.Command("open", address)
-	default:
-		command = exec.Command("xdg-open", address)
-	}
-	return command.Start()
 }

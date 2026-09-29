@@ -1,3 +1,4 @@
+// XML-модель подключённой библиотеки и контракты загруженных типов/шаблонов.
 package library
 
 import "encoding/xml"
@@ -100,6 +101,8 @@ type ISAObject struct {
 	Kind         string  `xml:"KINDOBJ"`
 }
 
+// EffectivePrefix читает имя поля объекта из двух поддерживаемых представлений ISAOBJ.
+// Возвращает атрибут PREFIX, если задан, иначе одноимённый вложенный элемент библиотеки.
 func (o ISAObject) EffectivePrefix() string {
 	if o.PrefixAttr != "" {
 		return o.PrefixAttr
@@ -138,14 +141,20 @@ type TemplateRef struct {
 	Template *Template
 }
 
+// SignatureKey создаёт составной ключ сигнатуры функции из ID объекта и имени типа библиотеки.
+// Возвращает строку с нулевым разделителем, исключающим неоднозначную склейку полей.
 func SignatureKey(objectID, typeName string) string {
 	return objectID + "\x00" + typeName
 }
 
+// IsLinkType классифицирует примитив библиотеки перед анализом связей и генерацией.
+// Возвращает true только для подтверждённого GROBJTYPE 20.
 func IsLinkType(objectType string) bool {
 	return objectType == "20"
 }
 
+// IsGraphicType отделяет графические примитивы от логических блоков библиотечного шаблона.
+// Принимает код GROBJTYPE и возвращает поддержку подтверждённых графических типов 1, 2 или 7.
 func IsGraphicType(objectType string) bool {
 	switch objectType {
 	case "1", "2", "7":
@@ -155,6 +164,8 @@ func IsGraphicType(objectType string) bool {
 	}
 }
 
+// IsSupportedBlockType проверяет код логического блока при чтении и генерации библиотечного FBD.
+// Возвращает поддержку подтверждённых типов 31/34/35/36/37, не выводя её из имени объекта.
 func IsSupportedBlockType(objectType string) bool {
 	switch objectType {
 	case "31", "34", "35", "36", "37":

@@ -1,0 +1,418 @@
+package fbd
+
+import (
+	"bytes"
+	"encoding/xml"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"scheme-xml-generator/internal/generator/addressing"
+	"scheme-xml-generator/internal/generator/contracts"
+	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	moduleid "scheme-xml-generator/internal/generator/modules"
+	"scheme-xml-generator/internal/generator/planning"
+	"scheme-xml-generator/internal/generator/xmlcodec"
+	"scheme-xml-generator/internal/generator/xmlmodel"
+	"scheme-xml-generator/internal/inputs/assignments"
+	"sort"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func skzDITestSource() *assignments.Plan {
+	return &assignments.Plan{Groups: []assignments.Group{{Key: "PLC:DI:A11", ControllerName: "PLC", Kind: "DI", Prefix: "A11", POUName: "DI_A11", Modules: []assignments.Module{
+		{Name: "A11-05", Type: "DI32", ObjectType: "D32V", Capacity: 32, Channels: []assignments.Channel{{Channel: 0, Tag: "_INPUT_A", Member: "C1", SourceRow: 2}, {Channel: 31, Tag: "_RESERVE_A", Member: "C1", SourceRow: 3, Reserve: true}}},
+		{Name: "A11-07", Type: "DI32", ObjectType: "D32V", Capacity: 32, Channels: []assignments.Channel{{Channel: 17, Tag: "_INPUT_B", Member: "C1", SourceRow: 4}}},
+	}}}}
+}
+
+func TestSKZDISparseChannelsAndAdditionalReserveModule(t *testing.T) {
+	for _, kind := range []string{"st", "fbd"} {
+		t.Run(kind, func(t *testing.T) {
+			source := skzDITestSource()
+			request := skzTestRequest(source, kind)
+			request.POUs[0].ModuleCount = skzTestModuleCount(3)
+			if kind == "st" {
+				id := int64(19)
+				request.POUs[0].ModuleIDs = append(request.POUs[0].ModuleIDs, &id)
+			}
+			plans, err := planning.PrepareModulePlans(source, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plan := plans[0]
+			if plan.ModuleCount != 3 || plan.SignalCount != 35 || plan.AssignmentCount != 99 || plan.RepeatedAssignmentCount != 0 {
+				t.Fatalf("counts: %+v", plan)
+			}
+			if !reflect.DeepEqual(plan.POUs[0].Modules[0].Channels, source.Groups[0].Modules[0].Channels) || plan.POUs[0].Modules[2].Name != "A11-08" {
+				t.Fatal("changed sparse source or added module slot")
+			}
+			result, err := (Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if kind == "st" {
+				var doc xmlmodel.OutputSTDocument
+				if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, xmlcodec.Utf8BOM), &doc); err != nil {
+					t.Fatal(err)
+				}
+				code := doc.POUS.Items[0].Code
+				if strings.Count(code, ":=") != 99 || strings.Contains(code, "_INPUT_A") || strings.Contains(code, "_RESERVE_A") {
+					t.Fatal("DI ST must map module inputs, independently of DDR receivers")
+				}
+				for i, module := range plan.POUs[0].Modules {
+					tag := moduleid.ModuleInstanceTag("PLC", module.Name)
+					prefix := fmt.Sprintf("_IO_I%d_DI32", *module.ID)
+					status := fmt.Sprintf("%s.Stat := ANY_TO_DWORD (QUAL_STAT(%s_0_VAL.Quality));", tag, prefix)
+					if strings.Count(code, status) != 1 {
+						t.Fatal("missing or repeated module status", i)
+					}
+					for channel := 0; channel < 32; channel++ {
+						want := fmt.Sprintf("%s.i%02d := %s_%d_VAL.Measurement;", tag, channel, prefix, channel)
+						if strings.Count(code, want) != 1 {
+							t.Fatal("missing physical channel", want)
+						}
+					}
+				}
+				if !strings.Contains(strings.Join(result.Warnings, " "), "ANY_TO_DWORD") || !strings.Contains(strings.Join(result.Warnings, " "), "QUAL_STAT") {
+					t.Fatal("missing DI function dependencies")
+				}
+			} else {
+				req, err := planning.RequirementsForController(plan)
+				if err != nil || req != (contracts.DocumentRequirements{POUCount: 1, SignalCount: 35, CardCount: 6, T11Count: 9}) {
+					t.Fatalf("requirements %+v: %v", req, err)
+				}
+				if result.Summary.Blocks != 6 || result.Summary.Links != 3 || result.Summary.Cards != 6 || result.Summary.T11Last != 208 {
+					t.Fatalf("summary %+v", result.Summary)
+				}
+				var doc xmlmodel.OutputDocument
+				if err := xml.Unmarshal(bytes.TrimPrefix(result.XML, xmlcodec.Utf8BOM), &doc); err != nil {
+					t.Fatal(err)
+				}
+				want := []string{"_PLC_A11_05|_00|_INPUT_A.C1", "_PLC_A11_05|_31|_RESERVE_A.C1", "_PLC_A11_07|_17|_INPUT_B.C1"}
+				if actual := skzDITopology(t, doc); !reflect.DeepEqual(actual, want) {
+					t.Fatalf("topology %v, want %v", actual, want)
+				}
+				if bytes.Contains(result.XML, []byte("_PLC_A11_08_")) || bytes.Contains(result.XML, []byte("GROBJTYPE=\"38\"")) || bytes.Contains(result.XML, []byte("IsaObjId=\"-9\"")) {
+					t.Fatal("invented a reserve receiver, BOOL or physical FBD block")
+				}
+				for _, block := range doc.POUS.Items[0].ISAGraf.Blocks.Items {
+					if block.Params.ISAObjectID == "1933" && (block.Params.Initial == nil || *block.Params.Initial != "") {
+						t.Fatal("D32 default IV must remain empty")
+					}
+				}
+			}
+		})
+	}
+}
+
+func skzDITopology(t *testing.T, doc xmlmodel.OutputDocument) []string {
+	t.Helper()
+	cards := map[string]string{}
+	for _, card := range doc.ISACards.Items {
+		cards[card.ID] = card.Info
+	}
+	var result []string
+	for _, pou := range doc.POUS.Items {
+		blocks := map[string]xmlmodel.OutputBlock{}
+		for _, block := range pou.ISAGraf.Blocks.Items {
+			blocks[block.T11ID] = block
+		}
+		for _, link := range pou.ISAGraf.Links.Items {
+			from, to := strings.Split(link.FirstPoint.Value, "|"), strings.Split(link.LastPoint.Last, "|")
+			if len(from) != 4 || len(to) != 4 || from[1] != "False" || to[1] != "True" || to[2] != "0" {
+				t.Fatal("invalid DI endpoints", link)
+			}
+			module, target := blocks[from[0]], blocks[to[0]]
+			if module.ObjectType != "37" || module.Params.ISAObjectID != "1933" || target.ObjectType != "31" || target.Params.ISAObjectID != "885" || (target.Params.Text != ".C1" && target.Params.Text != ".C2") || target.Info != cards[target.Params.CardID]+target.Params.Text || target.Params.Initial == nil || *target.Params.Initial != "6(FALSE),TRUE,1,2(FALSE),0,6(FALSE)" {
+				t.Fatal("DI must connect D32 outputs to DDR.C1/C2 owner cards", module, target)
+			}
+			result = append(result, module.Info+"|"+from[2]+"|"+target.Info)
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
+func TestSKZDINativeReferenceParity(t *testing.T) {
+	fbdData, err := os.ReadFile(filepath.Join("../../tests/fixtures/generator", "DI_850_FBD.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native xmlmodel.OutputDocument
+	// Native KLPath uses literal backspace separators. Normalize only the
+	// in-memory test copy so encoding/xml can inspect the untouched fixture.
+	if err := xml.Unmarshal(bytes.ReplaceAll(fbdData, []byte{8}, []byte{'/'}), &native); err != nil {
+		t.Fatal(err)
+	}
+	if len(native.POUS.Items) != 1 || len(native.POUS.Items[0].ISAGraf.Blocks.Items) != 234 || len(native.POUS.Items[0].ISAGraf.Links.Items) != 225 || len(native.ISACards.Items) != 234 {
+		t.Fatal("unexpected native DI reference composition")
+	}
+	group := assignments.Group{Key: "3000_S_SC_B01:DI:A11", ControllerName: "3000_S_SC_B01", Kind: "DI", Prefix: "A11", POUName: "DI_A11"}
+	for slot := 5; slot <= 13; slot++ {
+		group.Modules = append(group.Modules, assignments.Module{Name: fmt.Sprintf("A11-%02d", slot), Type: "DI32", ObjectType: "D32V", Capacity: 32})
+	}
+	nativeTopology := skzDITopology(t, native)
+	for row, binding := range nativeTopology {
+		parts := strings.Split(binding, "|")
+		slot, err := strconv.Atoi(strings.TrimPrefix(parts[0], "_3000_S_SC_B01_A11_"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		channel, err := strconv.Atoi(strings.TrimPrefix(parts[1], "_"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		group.Modules[slot-5].Channels = append(group.Modules[slot-5].Channels, assignments.Channel{Channel: channel, Tag: strings.TrimSuffix(parts[2], ".C1"), Member: "C1", SourceRow: row + 1})
+	}
+	source := &assignments.Plan{Groups: []assignments.Group{group}}
+	for _, kind := range []string{"fbd", "st"} {
+		request := skzTestRequest(source, kind)
+		for i, id := range request.POUs[0].ModuleIDs {
+			*id = int64(i + 5)
+		}
+		plans, err := planning.PrepareModulePlans(source, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plans[0].AssignmentCount != 297 || plans[0].RepeatedAssignmentCount != 0 || plans[0].SignalCount != 225 {
+			t.Fatalf("native counts %+v", plans[0])
+		}
+		result, err := (Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 1000, T11Start: 2000, CardStart: 3000})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kind == "fbd" {
+			var actual xmlmodel.OutputDocument
+			if err := xml.Unmarshal(result.XML, &actual); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(skzDITopology(t, actual), nativeTopology) || result.Summary.Blocks != 234 || result.Summary.Links != 225 || result.Summary.Cards != 234 || result.Summary.T11Last != 2458 {
+				t.Fatal("generated graph differs from native DI routing", result.Summary)
+			}
+		} else {
+			stData, err := os.ReadFile(filepath.Join("../../tests/fixtures/generator", "DI_850_ST.xml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var expected, actual xmlmodel.OutputSTDocument
+			if err := xml.Unmarshal(stData, &expected); err != nil {
+				t.Fatal(err)
+			}
+			if err := xml.Unmarshal(result.XML, &actual); err != nil {
+				t.Fatal(err)
+			}
+			assignments := func(code string) []string {
+				var lines []string
+				for _, line := range strings.Split(code, "\n") {
+					if strings.Contains(line, ":=") {
+						lines = append(lines, strings.TrimSpace(line))
+					}
+				}
+				return lines
+			}
+			if !reflect.DeepEqual(assignments(expected.POUS.Items[0].Code), assignments(actual.POUS.Items[0].Code)) {
+				t.Fatal("DI ST assignments differ from native reference")
+			}
+		}
+	}
+}
+
+func TestSKZDIInvalidMembersDuplicatesAndModuleIDs(t *testing.T) {
+	for _, kind := range []string{"fbd", "st"} {
+		for _, member := range []string{"", "C3", "c1", "c2", ".C1", ".C2"} {
+			source := skzDITestSource()
+			source.Groups[0].Modules[0].Channels[0].Member = member
+			if _, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind)); err == nil {
+				t.Fatalf("accepted unsupported DI member %q in %s", member, kind)
+			}
+		}
+		source := skzDITestSource()
+		source.Groups[0].Modules[1].Channels[0].Tag = "_input_a"
+		if _, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind)); err == nil || !strings.Contains(err.Error(), "нескольким физическим") {
+			t.Fatalf("accepted two drivers of one DDR target in %s: %v", kind, err)
+		}
+	}
+	for _, id := range []*int64{nil, func() *int64 { v := int64(0); return &v }(), func() *int64 { v := int64(-1); return &v }()} {
+		source := skzDITestSource()
+		request := skzTestRequest(source, "st")
+		request.POUs[0].ModuleIDs[1] = id
+		if _, err := planning.PrepareModulePlans(source, request); err == nil {
+			t.Fatal("accepted missing, repeated or negative DI physical ID")
+		}
+	}
+}
+
+func TestSKZDIC1C2ShareOwnerAcrossPOUs(t *testing.T) {
+	for _, kind := range []string{"fbd", "st"} {
+		source := &assignments.Plan{Groups: []assignments.Group{
+			{Key: "PLC:DI:A11", ControllerName: "PLC", Kind: "DI", Prefix: "A11", POUName: "DI_A11", Modules: []assignments.Module{{Name: "A11-05", Type: "DI32", ObjectType: "D32V", Capacity: 32, Channels: []assignments.Channel{{Channel: 0, Tag: "_LZS_MAIN", Member: "C1", SourceRow: 2}}}}},
+			{Key: "PLC:DI:A12", ControllerName: "PLC", Kind: "DI", Prefix: "A12", POUName: "DI_A12", Modules: []assignments.Module{{Name: "A12-01", Type: "DI32", ObjectType: "D32V", Capacity: 32, Channels: []assignments.Channel{{Channel: 17, Tag: "_lzs_main", Member: "C2", SourceRow: 3}}}}},
+		}}
+		plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind))
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := plans[0]
+		if plan.SignalCount != 2 || plan.AssignmentCount != 66 || plan.RepeatedAssignmentCount != 0 {
+			t.Fatalf("paired receiver counts: %+v", plan)
+		}
+		result, err := (Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kind == "fbd" {
+			req, err := planning.RequirementsForController(plan)
+			if err != nil || req != (contracts.DocumentRequirements{POUCount: 2, SignalCount: 2, T11Count: 6, CardCount: 3}) || result.Summary.Blocks != 4 || result.Summary.Links != 2 || result.Summary.Cards != 3 {
+				t.Fatalf("paired owner requirements %+v, summary %+v, error %v", req, result.Summary, err)
+			}
+			var doc xmlmodel.OutputDocument
+			if err := xml.Unmarshal(result.XML, &doc); err != nil {
+				t.Fatal(err)
+			}
+			want := []string{"_PLC_A11_05|_00|_LZS_MAIN.C1", "_PLC_A12_01|_17|_LZS_MAIN.C2"}
+			if got := skzDITopology(t, doc); !reflect.DeepEqual(got, want) {
+				t.Fatalf("paired routing %v, want %v", got, want)
+			}
+			first := doc.POUS.Items[0].ISAGraf.Blocks.Items[1]
+			second := &doc.POUS.Items[1].ISAGraf.Blocks.Items[1]
+			if first.Params.CardID != second.Params.CardID || *first.Params.Initial != *second.Params.Initial {
+				t.Fatal("C1 and C2 must share their DDR owner card and initial value")
+			}
+			// A repeated member across POU boundaries remains invalid even
+			// though the C1/C2 pair legitimately shares one owner card.
+			second.Params.Text, second.Info = ".C1", "_LZS_MAIN.C1"
+			invalid, err := xmlcodec.SerializeSCADAValue(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateLegacyModuleFBD(invalid, doc, req.T11Count); err == nil {
+				t.Fatal("accepted duplicate DDR member across POUs")
+			}
+		} else if bytes.Count(result.XML, []byte(":=")) != 66 || bytes.Contains(result.XML, []byte("_LZS_MAIN")) || bytes.Contains(result.XML, []byte(".C2")) {
+			t.Fatal("paired DDR fields must not alter module ST mapping")
+		}
+		for _, member := range []string{"C1", "C2"} {
+			source.Groups[0].Modules[0].Channels[0].Member = member
+			source.Groups[1].Modules[0].Channels[0].Member = member
+			if _, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind)); err == nil {
+				t.Fatal("accepted case-insensitive duplicate target", member, kind)
+			}
+		}
+	}
+}
+
+func TestSKZDIEmptySpareOnlyModules(t *testing.T) {
+	for _, kind := range []string{"fbd", "st"} {
+		source := skzDITestSource()
+		source.Groups[0].Modules[0].Channels = nil
+		source.Groups[0].Modules[1].Channels = []assignments.Channel{}
+		plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind))
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan := plans[0]
+		if plan.ModuleCount != 2 || plan.SignalCount != 0 || plan.AssignmentCount != 66 || plan.RepeatedAssignmentCount != 0 {
+			t.Fatalf("spare-only counts: %+v", plan)
+		}
+		result, err := (Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if kind == "fbd" {
+			req, err := planning.RequirementsForController(plan)
+			if err != nil || req != (contracts.DocumentRequirements{POUCount: 1, T11Count: 2, CardCount: 2}) || result.Summary.Blocks != 2 || result.Summary.Links != 0 || result.Summary.Cards != 2 {
+				t.Fatalf("spare-only FBD %+v, %+v, %v", req, result.Summary, err)
+			}
+			if bytes.Contains(result.XML, []byte("GROBJTYPE=\"31\"")) || bytes.Contains(result.XML, []byte(".C1")) || bytes.Contains(result.XML, []byte(".C2")) {
+				t.Fatal("invented DDR targets for spare-only module")
+			}
+		} else if bytes.Count(result.XML, []byte(":=")) != 66 || !bytes.Contains(result.XML, []byte("_PLC_A11_05.i31 := _IO_I0_DI32_31_VAL.Measurement;")) || !bytes.Contains(result.XML, []byte("_PLC_A11_07.Stat := ANY_TO_DWORD (QUAL_STAT(_IO_I1_DI32_0_VAL.Quality));")) {
+			t.Fatal("spare-only modules must preserve all physical ST assignments")
+		}
+		for group := range skzTestSource().Groups {
+			other := skzTestSource()
+			other.Groups[group].Modules[0].Channels = nil
+			if _, err := planning.PrepareModulePlans(other, skzTestRequest(other, kind)); err == nil {
+				t.Fatal("empty AI/DO module must still be rejected", group, kind)
+			}
+		}
+	}
+}
+
+func TestSKZDIMixedPlanAndSeparatePLCNamespaces(t *testing.T) {
+	for _, kind := range []string{"st", "fbd"} {
+		source := skzTestSource()
+		source.Groups = append(source.Groups, skzDITestSource().Groups...)
+		other := skzDITestSource().Groups[0]
+		other.ControllerName, other.Key = "PLC_OTHER", "PLC_OTHER:DI:A11"
+		source.Groups = append(source.Groups, other)
+		plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind))
+		if err != nil || len(plans) != 2 {
+			t.Fatalf("mixed plans: %+v, %v", plans, err)
+		}
+		wantAssignments := 75
+		if kind == "st" {
+			wantAssignments = 136
+		}
+		if plans[0].AssignmentCount != wantAssignments || plans[0].RepeatedAssignmentCount != 1 || plans[1].AssignmentCount != 66 || plans[1].RepeatedAssignmentCount != 0 {
+			t.Fatalf("mixed assignment counts: %+v", plans)
+		}
+		for _, plan := range plans {
+			if _, err := (Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func TestSKZDICPUProfileTransportAndExpandedChannelLimits(t *testing.T) {
+	source := skzDITestSource()
+	for _, kind := range []string{"fbd", "st"} {
+		plans, err := planning.PrepareModulePlans(source, skzTestRequest(source, kind))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, cpu := range []string{cpuprofile.ControllerCPU715, cpuprofile.ControllerCPU850} {
+			for _, profile := range []string{"", addressing.PhysicalProfileLegacy, addressing.PhysicalProfileMeasurement} {
+				ctx := addressing.DefaultModuleContext()
+				ctx.ControllerTypeName, ctx.PhysicalProfile = cpu, profile
+				_, err := (Generator{}).GenerateModuleMapping(plans[0], ctx, contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+				wantOK := kind == "fbd" || cpu == cpuprofile.ControllerCPU850 && profile != addressing.PhysicalProfileLegacy
+				if (err == nil) != wantOK {
+					t.Fatalf("%s %s %s: %v", kind, cpu, profile, err)
+				}
+			}
+		}
+		if kind == "fbd" {
+			for _, ids := range []contracts.IDRange{{POUID: contracts.MaxTransportID + 1, T11Start: 200, CardStart: 300}, {POUID: 100, T11Start: contracts.MaxTransportID - 6, CardStart: 300}, {POUID: 100, T11Start: 200, CardStart: contracts.MaxTransportID - 3}} {
+				if _, err := (Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), ids); err == nil {
+					t.Fatal("accepted overflowing transport range", ids)
+				}
+			}
+		}
+	}
+	large := skzDITestSource()
+	large.Groups[0].Modules = nil
+	for i := 0; i < 129; i++ {
+		large.Groups[0].Modules = append(large.Groups[0].Modules, assignments.Module{Name: fmt.Sprintf("A11-%02d", i), Type: "DI32", ObjectType: "D32V", Capacity: 32, Channels: []assignments.Channel{{Channel: 31, Tag: fmt.Sprintf("_DI_%d", i), Member: "C1", SourceRow: i + 1}}})
+	}
+	if _, err := planning.PrepareModulePlans(large, skzTestRequest(large, "st")); err == nil {
+		t.Fatal("accepted more than 4096 expanded DI ST channels")
+	}
+	plans, err := planning.PrepareModulePlans(large, skzTestRequest(large, "fbd"))
+	if err != nil {
+		t.Fatal("sparse software graph should fit", err)
+	}
+	direct := plans[0]
+	direct.Kind, direct.POUs[0].Name = "st", "DI_A11_channels"
+	for i := range direct.POUs[0].Modules {
+		id := int64(i)
+		direct.POUs[0].Modules[i].ID = &id
+	}
+	if _, err := planning.RequirementsForController(direct); err == nil {
+		t.Fatal("direct caller bypassed expanded DI channel limit")
+	}
+}

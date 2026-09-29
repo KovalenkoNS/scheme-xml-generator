@@ -1,0 +1,300 @@
+// Retired assertions from tests/whitebox/internal/appserver/ao_mapping_test.go; not executed.
+type aoTestDocument struct {
+	POUs []struct {
+		ID     string `xml:"ID,attr"`
+		Name   string `xml:"NAME,attr"`
+		Number string `xml:"POUNum,attr"`
+		Blocks []struct {
+			ID       string `xml:"T11ID,attr"`
+			Info     string `xml:"Info,attr"`
+			Graphics struct {
+				X int `xml:"X,attr"`
+				Y int `xml:"Y,attr"`
+			} `xml:"Graphics"`
+			Params struct {
+				CardID string `xml:"cardId,attr"`
+			} `xml:"Params"`
+		} `xml:"ISAGraf>Blocks>Block"`
+	} `xml:"POUS>OnePOU"`
+	Cards []struct {
+		ID   string `xml:"ID,attr"`
+		Info string `xml:"Info,attr"`
+	} `xml:"ISACARDSINFO>rec"`
+}
+
+func decodeAOTestXML(t *testing.T, data []byte) aoTestDocument {
+	t.Helper()
+	var document aoTestDocument
+	if err := xml.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	return document
+}
+
+
+// Retired assertions from tests/whitebox/internal/appserver/skz_native_do_test.go; not executed.
+// This oracle starts with the independently parsed workbook, then walks XML
+// links by block IDs. It does not reuse the generator's routing helpers.
+func assertNativeDOAPIRoutes(t *testing.T, data []byte, source *assignments.Plan, request generator.ModuleMappingRequest, scs string) {
+	t.Helper()
+	type block struct {
+		ID     string `xml:"T11ID,attr"`
+		Info   string `xml:"Info,attr"`
+		Params struct {
+			ISA  string `xml:"IsaObjId,attr"`
+			Card string `xml:"cardId,attr"`
+			Text string `xml:"T11Text,attr"`
+		} `xml:"Params"`
+	}
+	var doc struct {
+		POUs []struct {
+			Name   string  `xml:"NAME,attr"`
+			Blocks []block `xml:"ISAGraf>Blocks>Block"`
+			Links  []struct {
+				First struct {
+					Value string `xml:"FP,attr"`
+				} `xml:"FirstPoint"`
+				Last struct {
+					Value string `xml:"LP,attr"`
+				} `xml:"LastPoint"`
+			} `xml:"ISAGraf>Links>Link"`
+		} `xml:"POUS>OnePOU"`
+		Cards []struct {
+			ID   string `xml:"ID,attr"`
+			Info string `xml:"Info,attr"`
+		} `xml:"ISACARDSINFO>rec"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{}
+	wantQuality := map[string]string{}
+	choices := map[string]generator.ModuleGroupRequest{}
+	for _, choice := range request.POUs {
+		choices[choice.GroupKey] = choice
+	}
+	for _, group := range source.Groups {
+		if group.ControllerName != scs {
+			continue
+		}
+		choice := choices[group.Key]
+		for index, module := range group.Modules {
+			name := "_" + scs + "_" + strings.ReplaceAll(module.Name, "-", "_")
+			wantQuality[group.POUName+"|"+name] = fmt.Sprintf("_IO_I%d_DO32P_0_VAL_DIAG", *choice.ModuleIDs[index])
+			for _, channel := range module.Channels {
+				want[fmt.Sprintf("%s|%s|i%02d", group.POUName, name, channel.Channel)] = channel.Tag
+			}
+		}
+	}
+	cards := map[string]string{}
+	for _, card := range doc.Cards {
+		cards[card.ID] = card.Info
+	}
+	for _, pou := range doc.POUs {
+		blocks := map[string]block{}
+		incoming := map[string][]string{}
+		for _, b := range pou.Blocks {
+			blocks[b.ID] = b
+		}
+		for _, link := range pou.Links {
+			from, to := strings.Split(link.First.Value, "|"), strings.Split(link.Last.Value, "|")
+			if len(from) != 4 || len(to) != 4 {
+				t.Fatal("malformed endpoints")
+			}
+			if incoming[to[0]+"|"+to[2]] != nil {
+				t.Fatal("multiple drivers")
+			}
+			incoming[to[0]+"|"+to[2]] = from
+		}
+		for _, b := range pou.Blocks {
+			if b.Params.ISA != "1933" {
+				continue
+			}
+			key := pou.Name + "|" + b.Info
+			quality := incoming[b.ID+"|sts"]
+			if len(quality) != 4 || quality[2] != "Result" || blocks[quality[0]].Params.ISA != "17611" {
+				t.Fatal("missing QUAL_STAT→sts", key)
+			}
+			physical := incoming[quality[0]+"|QUAL"]
+			if len(physical) != 4 || physical[2] != "0" || blocks[physical[0]].Params.ISA != "6127" {
+				t.Fatal("missing physical→QUAL", key)
+			}
+			pb := blocks[physical[0]]
+			if pb.Params.Text != ".Quality" || cards[pb.Params.Card] != wantQuality[key] || wantQuality[key] == "" {
+				t.Fatal("wrong physical channel/ID", key, cards[pb.Params.Card], wantQuality[key])
+			}
+			delete(wantQuality, key)
+			for ch := 0; ch < 32; ch++ {
+				pin := fmt.Sprintf("i%02d", ch)
+				expected, exists := want[key+"|"+pin]
+				not := incoming[b.ID+"|"+pin]
+				if !exists {
+					if not != nil {
+						t.Fatal("invented source", key, pin)
+					}
+					continue
+				}
+				if len(not) != 4 || not[2] != "Result" || blocks[not[0]].Params.ISA != "-32" {
+					t.Fatal("DO must pass NOT", key, pin)
+				}
+				origin := incoming[not[0]+"|0"]
+				if len(origin) != 4 || origin[2] != "0" || blocks[origin[0]].Params.ISA != "-9" || blocks[origin[0]].Info != expected {
+					t.Fatal("source lost", key, pin, expected)
+				}
+				delete(want, key+"|"+pin)
+			}
+		}
+	}
+	if len(want) != 0 || len(wantQuality) != 0 {
+		t.Fatal("missing routes", len(want), len(wantQuality))
+	}
+}
+
+
+// Retired assertions from tests/whitebox/internal/appserver/skz_di_test.go; not executed.
+func assertDIOwnerCardsShared(t *testing.T, data []byte) {
+	t.Helper()
+	var doc struct {
+		POUs []struct {
+			Blocks []struct {
+				Info   string `xml:"Info,attr"`
+				Params struct {
+					Card string `xml:"cardId,attr"`
+					ISA  string `xml:"IsaObjId,attr"`
+				} `xml:"Params"`
+			} `xml:"ISAGraf>Blocks>Block"`
+		} `xml:"POUS>OnePOU"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	owners, members := map[string]string{}, map[string]int{}
+	for _, pou := range doc.POUs {
+		for _, block := range pou.Blocks {
+			if block.Params.ISA != "885" {
+				continue
+			}
+			owner := strings.TrimSuffix(strings.TrimSuffix(block.Info, ".C1"), ".C2")
+			if old := owners[owner]; old != "" && old != block.Params.Card {
+				t.Fatal("C1 and C2 have different owner cards", owner)
+			}
+			owners[owner] = block.Params.Card
+			members[owner]++
+		}
+	}
+	for owner, count := range members {
+		if count != 2 {
+			t.Fatal("raw workbook receiver must have C1 and C2", owner, count)
+		}
+	}
+}
+
+
+// Retired assertions from tests/whitebox/internal/appserver/skz_raw_do_test.go; not executed.
+func assertSKZRawRouting(t *testing.T, data []byte, source *assignments.Plan, scs, kind string) {
+	t.Helper()
+	type block struct {
+		ID     string `xml:"T11ID,attr"`
+		Info   string `xml:"Info,attr"`
+		Params struct {
+			Card string `xml:"cardId,attr"`
+			ISA  string `xml:"IsaObjId,attr"`
+		} `xml:"Params"`
+	}
+	var doc struct {
+		POUs []struct {
+			Name   string  `xml:"NAME,attr"`
+			Blocks []block `xml:"ISAGraf>Blocks>Block"`
+			Links  []struct {
+				First struct {
+					Value string `xml:"FP,attr"`
+				} `xml:"FirstPoint"`
+				Last struct {
+					Value string `xml:"LP,attr"`
+				} `xml:"LastPoint"`
+			} `xml:"ISAGraf>Links>Link"`
+		} `xml:"POUS>OnePOU"`
+	}
+	if err := xml.Unmarshal(data, &doc); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{}
+	for _, group := range source.Groups {
+		if group.ControllerName != scs || kind != "" && kind != group.Kind {
+			continue
+		}
+		for _, module := range group.Modules {
+			tag := "_" + scs + "_" + strings.ReplaceAll(module.Name, "-", "_")
+			for _, channel := range module.Channels {
+				key := fmt.Sprintf("%s|%s|0|%s|i%02d", group.POUName, channel.Tag, tag, channel.Channel)
+				if group.Kind == "DI" {
+					key = fmt.Sprintf("%s|%s|_%02d|%s.%s|0", group.POUName, tag, channel.Channel, channel.Tag, channel.Member)
+				}
+				want[key] = true
+			}
+		}
+	}
+	owners := map[string]string{}
+	for _, pou := range doc.POUs {
+		blocks := map[string]block{}
+		for _, b := range pou.Blocks {
+			blocks[b.ID] = b
+			if b.Params.ISA == "-9" {
+				if old := owners[b.Info]; old != "" && old != b.Params.Card {
+					t.Fatal("repeated DO source has multiple owner cards", b.Info)
+				}
+				owners[b.Info] = b.Params.Card
+			}
+		}
+		for _, link := range pou.Links {
+			from, to := strings.Split(link.First.Value, "|"), strings.Split(link.Last.Value, "|")
+			if len(from) != 4 || len(to) != 4 || from[1] != "False" || to[1] != "True" {
+				t.Fatal("invalid raw workbook link endpoints", link)
+			}
+			key := strings.Join([]string{pou.Name, blocks[from[0]].Info, from[2], blocks[to[0]].Info, to[2]}, "|")
+			if !want[key] {
+				t.Fatal("unexpected or repeated raw workbook connection", key)
+			}
+			delete(want, key)
+		}
+	}
+	if len(want) != 0 {
+		t.Fatal("raw workbook connections lost", len(want))
+	}
+}
+
+
+				return
+
+				if batch.Summary.Blocks != 460 || batch.Summary.Cards != 127 {
+					t.Fatalf("B03 sparse FBD must not gain BOOL blocks/cards: %+v", batch.Summary)
+				}
+				assertSKZRawRouting(t, data, source, scs, "DO")
+				var document struct {
+					POUs []struct {
+						Blocks []struct {
+							Info   string `xml:"Info,attr"`
+							Params struct {
+								ISA string `xml:"IsaObjId,attr"`
+							} `xml:"Params"`
+						} `xml:"ISAGraf>Blocks>Block"`
+						Links []struct{} `xml:"ISAGraf>Links>Link"`
+					} `xml:"POUS>OnePOU"`
+				}
+				if err := xml.Unmarshal(data, &document); err != nil {
+					t.Fatal(err)
+				}
+				boolReferences, links := 0, 0
+				tags := map[string]bool{}
+				for _, pou := range document.POUs {
+					links += len(pou.Links)
+					for _, block := range pou.Blocks {
+						if block.Params.ISA == "-9" {
+							boolReferences++
+							tags[block.Info] = true
+						}
+					}
+				}
+				if boolReferences != 444 || links != 444 || len(tags) != 111 {
+					t.Fatalf("B03 FBD gained invented bindings: %d references, %d links, %d tags", boolReferences, links, len(tags))
+				}
