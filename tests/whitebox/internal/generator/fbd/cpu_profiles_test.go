@@ -3,9 +3,11 @@ package fbd
 
 import (
 	"scheme-xml-generator/internal/config"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"strings"
 	"testing"
 )
@@ -17,7 +19,7 @@ func TestGenerationContextIsRequestLocal(t *testing.T) {
 	settings.Common.ControllerType = cpuprofile.ControllerCPU715
 	g := Generator{Config: settings}
 	for _, cpu := range []string{cpuprofile.ControllerCPU850, cpuprofile.ControllerCPU715} {
-		copy, err := g.withGenerationContext(&contracts.GenerationContext{ControllerTypeName: " " + cpu + " "})
+		copy, err := g.withGenerationContext(&fbdrequest.GenerationContext{ControllerTypeName: " " + cpu + " "})
 		if err != nil || copy.Config.Common.ControllerType != cpu {
 			t.Fatalf("cpu=%s, copy=%+v, err=%v", cpu, copy.Config.Common, err)
 		}
@@ -30,7 +32,7 @@ func TestGenerationContextIsRequestLocal(t *testing.T) {
 		t.Fatal("omitted context must preserve config")
 	}
 	for _, cpu := range []string{"", "850", "CPU715", "TENIX-CPU999", "TENIX-CPU850\x00"} {
-		if _, err := g.withGenerationContext(&contracts.GenerationContext{ControllerTypeName: cpu}); err == nil {
+		if _, err := g.withGenerationContext(&fbdrequest.GenerationContext{ControllerTypeName: cpu}); err == nil {
 			t.Fatalf("accepted unsupported explicit CPU %q", cpu)
 		}
 	}
@@ -43,22 +45,22 @@ func TestLibraryFBDContextBothControllers(t *testing.T) {
 	settings := config.Default()
 	settings.Common.ControllerType = cpuprofile.ControllerCPU715
 	g := Generator{Config: settings}
-	ids := contracts.IDRange{T11Start: 4500000, CardStart: 950000, POUID: 250000}
+	ids := xmlidentity.IDRange{T11Start: 4500000, CardStart: 950000, POUID: 250000}
 	for _, cpu := range []string{cpuprofile.ControllerCPU715, cpuprofile.ControllerCPU850} {
 		t.Run(cpu, func(t *testing.T) {
-			context := &contracts.GenerationContext{ControllerTypeName: cpu}
-			legacy, err := g.Generate(ref, contracts.Request{Context: context, ObjectName: "_CPU_SIGNAL", NameMode: "base"}, ids)
+			context := &fbdrequest.GenerationContext{ControllerTypeName: cpu}
+			legacy, err := g.Generate(ref, fbdrequest.Request{Context: context, ObjectName: "_CPU_SIGNAL", NameMode: "base"}, ids)
 			if err != nil {
 				t.Fatal(err)
 			}
-			document, err := g.GenerateDocument(contracts.Request{Context: context}, []contracts.ResolvedPOU{{
-				Request: contracts.POURequest{Name: "CPU_POU"},
-				Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{ObjectName: "_CPU_SIGNAL", NameMode: "base"}}},
+			document, err := g.GenerateDocument(fbdrequest.Request{Context: context}, []fbdrequest.ResolvedPOU{{
+				Request: fbdrequest.POURequest{Name: "CPU_POU"},
+				Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{ObjectName: "_CPU_SIGNAL", NameMode: "base"}}},
 			}}, ids)
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, result := range []contracts.Result{legacy, document} {
+			for _, result := range []xmlartifact.Result{legacy, document} {
 				if parseGeneratedDocument(t, result.XML).Common.ControllerType != cpu {
 					t.Fatalf("CPU %s lost from generated Common", cpu)
 				}

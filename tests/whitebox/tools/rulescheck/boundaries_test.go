@@ -20,6 +20,12 @@ func TestAbstractionBoundaries(t *testing.T) {
 		{"legacy JSON alias stays a wire field", "internal/domain/analogoutput/model.go", "package analogoutput; type Group struct { ControllerName string `json:\"fcs\"` }", false},
 		{"renderer uses general model", "internal/generator/st/assignments.go", `package st; import "scheme-xml-generator/internal/domain/assignments"`, false},
 		{"URL alias stays at transport boundary", "internal/httpapi/io/modulemapping/routes.go", `package modulemapping; const alias = "/api/skz/preview"`, false},
+		{"HTTP imports aggregate facade", "internal/httpapi/hmi/ao.go", `package hmi; import "scheme-xml-generator/internal/generator"`, true},
+		{"HTTP imports sibling generator", "internal/httpapi/hmi/ao.go", `package hmi; import "scheme-xml-generator/internal/generator/fbd"`, true},
+		{"HTTP imports own generator", "internal/httpapi/hmi/ao.go", `package hmi; import "scheme-xml-generator/internal/generator/hmi"`, false},
+		{"workspace imports renderer", "internal/httpapi/workspace/service.go", `package workspace; import "scheme-xml-generator/internal/generator/fbd"`, true},
+		{"workspace imports settings", "internal/httpapi/workspace/service.go", `package workspace; import "scheme-xml-generator/internal/config"`, false},
+		{"mixed contracts restored", "internal/generator/fbd/document.go", `package fbd; import "scheme-xml-generator/internal/generator/contracts"`, true},
 	}
 	for _, item := range cases {
 		t.Run(item.name, func(t *testing.T) {

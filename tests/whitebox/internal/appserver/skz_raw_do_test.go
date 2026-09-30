@@ -10,11 +10,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	"scheme-xml-generator/internal/generator/addressing"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
+	"scheme-xml-generator/internal/inputs/assignments"
 	"strings"
 	"testing"
-
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/inputs/assignments"
 )
 
 // TestSKZRawDOAndMixedWorkbookAPI generates DO-only and mixed DI/DO ST batches from the raw workbook, checking all
@@ -71,7 +72,7 @@ func TestSKZRawDOAndMixedWorkbookAPI(t *testing.T) {
 						t.Fatal("DO-only selection or native context lost", file.Summary)
 					}
 
-					assertSKZRawST(t, data, source, request, file.ControllerName, generator.PhysicalProfileMeasurement)
+					assertSKZRawST(t, data, source, request, file.ControllerName, addressing.PhysicalProfileMeasurement)
 
 					download := httptest.NewRecorder()
 					application.Handler().ServeHTTP(download, httptest.NewRequest(http.MethodGet, file.URL, nil))
@@ -86,9 +87,9 @@ func TestSKZRawDOAndMixedWorkbookAPI(t *testing.T) {
 
 // assertSKZRawST compares downloaded ST against independently parsed DI/DO modules and selected physical IDs,
 // requiring every assignment exactly once.
-func assertSKZRawST(t *testing.T, data []byte, source *assignments.Plan, request generator.ModuleMappingRequest, scs, profile string) {
+func assertSKZRawST(t *testing.T, data []byte, source *assignments.Plan, request stassignment.ModuleMappingRequest, scs, profile string) {
 	t.Helper()
-	choices := map[string]generator.ModuleGroupRequest{}
+	choices := map[string]stassignment.ModuleGroupRequest{}
 	for _, choice := range request.POUs {
 		choices[choice.GroupKey] = choice
 	}
@@ -109,7 +110,7 @@ func assertSKZRawST(t *testing.T, data []byte, source *assignments.Plan, request
 			} else {
 				for channel := 0; channel < 32; channel++ {
 					line := fmt.Sprintf("_IO_Q%d_DO32P_%d_VAL.Measurement := %s._%02d;", id, channel, tag, channel)
-					if profile == generator.PhysicalProfileLegacy {
+					if profile == addressing.PhysicalProfileLegacy {
 						line = fmt.Sprintf("_IO_QU%d_%d.Value := %s._%02d;", id, channel, tag, channel)
 					}
 					want[line] = true
@@ -172,7 +173,7 @@ func TestRawDOSparseSourceGeneratesFullChannelST(t *testing.T) {
 		t.Fatal("A33-08 missing from raw source")
 	}
 	all := skzRawRequest(t, workbook, "st", "DO", "")
-	var choices []generator.ModuleGroupRequest
+	var choices []stassignment.ModuleGroupRequest
 	var targetID int64
 	for _, choice := range all.POUs {
 		if strings.HasPrefix(choice.GroupKey, scs+":") {
@@ -183,14 +184,14 @@ func TestRawDOSparseSourceGeneratesFullChannelST(t *testing.T) {
 		}
 	}
 	for _, tc := range []struct{ cpu, profile string }{
-		{generator.ControllerCPU715, generator.PhysicalProfileLegacy},
-		{generator.ControllerCPU850, generator.PhysicalProfileMeasurement},
+		{cpuprofile.ControllerCPU715, addressing.PhysicalProfileLegacy},
+		{cpuprofile.ControllerCPU850, addressing.PhysicalProfileMeasurement},
 	} {
 		for _, mode := range []string{"st"} {
 			t.Run(tc.cpu+"/"+mode, func(t *testing.T) {
 				application, _, outputDir := aoTestApplication(t)
 				application.repository = nil
-				request := generator.ModuleMappingRequest{Kind: mode, POUs: choices}
+				request := stassignment.ModuleMappingRequest{Kind: mode, POUs: choices}
 				context, err := json.Marshal(map[string]string{"controllerTypeName": tc.cpu, "physicalProfile": tc.profile})
 				if err != nil {
 					t.Fatal(err)
@@ -219,7 +220,7 @@ func TestRawDOSparseSourceGeneratesFullChannelST(t *testing.T) {
 				assertSKZRawST(t, data, source, request, scs, tc.profile)
 				for channel := 28; channel < 32; channel++ {
 					line := fmt.Sprintf("_IO_Q%d_DO32P_%d_VAL.Measurement := _%s_A33_08._%02d;", targetID, channel, scs, channel)
-					if tc.profile == generator.PhysicalProfileLegacy {
+					if tc.profile == addressing.PhysicalProfileLegacy {
 						line = fmt.Sprintf("_IO_QU%d_%d.Value := _%s_A33_08._%02d;", targetID, channel, scs, channel)
 					}
 					if bytes.Count(data, []byte(line)) != 1 {

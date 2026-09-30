@@ -3,8 +3,9 @@ package addressing
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
+	programcontext "scheme-xml-generator/internal/generator/program"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -12,7 +13,7 @@ import (
 
 // NormalizeProgramContext Нормализует CPU, адресацию и числовые поля контекста перекладок.
 // Проверяет диапазон POUNum с учётом числа создаваемых программ.
-func NormalizeProgramContext(ctx contracts.ProgramContext, pouCount int) (contracts.ProgramContext, error) {
+func NormalizeProgramContext(ctx programcontext.ProgramContext, pouCount int) (programcontext.ProgramContext, error) {
 	for _, item := range []struct {
 		name  string
 		value *string
@@ -46,7 +47,7 @@ func NormalizeProgramContext(ctx contracts.ProgramContext, pouCount int) (contra
 		return ctx, fmt.Errorf("неизвестный физический профиль %q", ctx.PhysicalProfile)
 	}
 	number, _ := strconv.ParseInt(ctx.POUNumber, 10, 32)
-	if number > contracts.MaxTransportID-int64(pouCount)+1 {
+	if number > xmlidentity.MaxTransportID-int64(pouCount)+1 {
 		return ctx, fmt.Errorf("диапазон POUNum выходит за signed 32-bit")
 	}
 	return ctx, nil

@@ -3,23 +3,20 @@ package fbd
 
 import (
 	"fmt"
-
-	"scheme-xml-generator/internal/generator/contracts"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
 	"scheme-xml-generator/internal/generator/identifiers"
-
 	"scheme-xml-generator/internal/library"
 	"sort"
-
 	"strings"
 	"unicode"
 )
 
 // PreviewName Показывает имена будущего экземпляра и его карточек по выбранному шаблону.
 // Использует режим имени и введённый тег, возвращает ошибки без выделения ID.
-func PreviewName(ref *library.TemplateRef, objectName, mode string) (contracts.NamePreview, error) {
+func PreviewName(ref *library.TemplateRef, objectName, mode string) (fbdrequest.NamePreview, error) {
 	baseName, matched, err := normalizeObjectName(ref, objectName, mode)
 	if err != nil {
-		return contracts.NamePreview{}, err
+		return fbdrequest.NamePreview{}, err
 	}
 	cardIndex := sourceCards(ref)
 	seen := make(map[string]struct{})
@@ -35,11 +32,11 @@ func PreviewName(ref *library.TemplateRef, objectName, mode string) (contracts.N
 		seen[cardID] = struct{}{}
 		card, ok := cardIndex[cardID]
 		if !ok {
-			return contracts.NamePreview{}, fmt.Errorf("CARDID %s отсутствует в ISAOBJLIST объекта %s", cardID, ref.Owner.Name)
+			return fbdrequest.NamePreview{}, fmt.Errorf("CARDID %s отсутствует в ISAOBJLIST объекта %s", cardID, ref.Owner.Name)
 		}
 		names = append(names, baseName+card.EffectivePrefix())
 	}
-	return contracts.NamePreview{BaseName: baseName, MatchedPrefix: matched, ObjectNames: names}, nil
+	return fbdrequest.NamePreview{BaseName: baseName, MatchedPrefix: matched, ObjectNames: names}, nil
 }
 
 // normalizeObjectName Проверяет введённое имя экземпляра с учётом режима и имени библиотечного типа.

@@ -8,15 +8,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"testing"
-
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/addressing"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/inputs/assignments"
+	"testing"
 )
 
 // nativeDOAPIInput reads the prepared DO fixture, parses its source plan and builds a legacy-profile payload used
 // to test the retired HTTP route.
-func nativeDOAPIInput(t *testing.T) ([]byte, *assignments.Plan, generator.ModuleMappingRequest) {
+func nativeDOAPIInput(t *testing.T) ([]byte, *assignments.Plan, stassignment.ModuleMappingRequest) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "skzmap", "do_native.xlsx"))
 	if err != nil {
@@ -89,7 +89,7 @@ func TestPreparedDOBookGeneratesFullST(t *testing.T) {
 					t.Fatal("FBD graph metadata leaked into ST")
 				}
 
-				assertSKZRawST(t, xmlData, source, request, file.ControllerName, generator.PhysicalProfileMeasurement)
+				assertSKZRawST(t, xmlData, source, request, file.ControllerName, addressing.PhysicalProfileMeasurement)
 
 			}
 		})
@@ -103,7 +103,7 @@ func TestSKZNativeDOAPIRejectsInvalidProfilesWithoutWrites(t *testing.T) {
 	for _, scenario := range []string{"missing ID", "duplicate ID", "CPU715", "legacy", "unknown profile", "ST profile"} {
 		t.Run(scenario, func(t *testing.T) {
 			request := base
-			request.POUs = append([]generator.ModuleGroupRequest(nil), base.POUs...)
+			request.POUs = append([]stassignment.ModuleGroupRequest(nil), base.POUs...)
 			request.POUs[0].ModuleIDs = append([]*int64(nil), base.POUs[0].ModuleIDs...)
 			context := ""
 			switch scenario {

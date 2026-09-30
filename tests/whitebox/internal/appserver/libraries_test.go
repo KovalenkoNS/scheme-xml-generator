@@ -12,12 +12,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/allocation"
+	"scheme-xml-generator/internal/library"
 	"testing"
 	"testing/fstest"
-
-	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/library"
 )
 
 const importLibraryXML = `<root><SCADATA_VER VER="29"/><SECTION Num="2"><OTHER><OBJTYPE ID="10" Name="Library type"><ISAOBJLIST><ISAOBJ ID="11" Prefix="value"><ISATNAME>REAL</ISATNAME></ISAOBJ></ISAOBJLIST></OBJTYPE></OTHER></SECTION></root>`
@@ -35,11 +34,11 @@ func libraryImportApp(t *testing.T) (*Server, string) {
 	if _, err := repository.Refresh(); err != nil {
 		t.Fatal(err)
 	}
-	allocator, err := generator.NewAllocator(filepath.Join(temp, "state.json"), config.Default().IDs)
+	allocator, err := allocation.NewAllocator(filepath.Join(temp, "state.json"), config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := New(repository, generator.Generator{Config: config.Default()}, allocator, filepath.Join(temp, "output"), fstest.MapFS{}, log.New(io.Discard, "", 0))
+	app := New(repository, config.Default(), allocator, filepath.Join(temp, "output"), fstest.MapFS{}, log.New(io.Discard, "", 0))
 	return app, libraries
 }
 

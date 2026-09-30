@@ -3,7 +3,7 @@ package exportprofile
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/controller"
+	"scheme-xml-generator/internal/domain/controller"
 )
 
 // ValidateAOPhysicalST допускает только CPU с подтверждённым физическим AO ST-экспортом.

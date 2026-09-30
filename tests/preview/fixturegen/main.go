@@ -6,12 +6,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-
 	"scheme-xml-generator/internal/aomap"
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	"scheme-xml-generator/internal/generator/addressing"
+	fbdgen "scheme-xml-generator/internal/generator/fbd"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	hmigen "scheme-xml-generator/internal/generator/hmi"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
+	stgen "scheme-xml-generator/internal/generator/st"
 	"scheme-xml-generator/internal/library"
+	"strings"
 )
 
 // main prepares saved library FBD, ST and HMI outputs in a bounded test directory.
@@ -49,12 +54,12 @@ func main() {
 	if ref == nil {
 		panic("actual all_lb_sinopec DIO-1 library template is required for visual verification")
 	}
-	gen := generator.Generator{Config: config.Default()}
-	pous := []generator.ResolvedPOU{}
+	gen := fbdgen.Generator{Config: config.Default()}
+	pous := []fbdrequest.ResolvedPOU{}
 	for i := 0; i < 2; i++ {
-		pous = append(pous, generator.ResolvedPOU{Request: generator.POURequest{Name: fmt.Sprintf("PLC715_DI_%d", i+1)}, Signals: []generator.ResolvedSignal{{Ref: ref, Request: generator.SignalRequest{TemplateKey: ref.Key, ObjectName: fmt.Sprintf("_PREVIEW_DI_%d", i+1), NameMode: "base", Invert: i == 0}}}})
+		pous = append(pous, fbdrequest.ResolvedPOU{Request: fbdrequest.POURequest{Name: fmt.Sprintf("PLC715_DI_%d", i+1)}, Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: fmt.Sprintf("_PREVIEW_DI_%d", i+1), NameMode: "base", Invert: i == 0}}}})
 	}
-	fbd, err := gen.GenerateDocument(generator.Request{}, pous, generator.IDRange{T11Start: 10000, CardStart: 20000, POUID: 30000})
+	fbd, err := gen.GenerateDocument(fbdrequest.Request{}, pous, xmlidentity.IDRange{T11Start: 10000, CardStart: 20000, POUID: 30000})
 	if err != nil {
 		panic(err)
 	}
@@ -69,26 +74,26 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	request := generator.AOSTRequest{}
+	request := stgen.AOSTRequest{}
 	for i, group := range plan.Groups {
 		id := int64(i + 1)
-		request.POUs = append(request.POUs, generator.AOSTPOURequest{GroupKey: group.Key, ModuleCount: len(group.Modules), ModuleIDs: []*int64{&id}})
+		request.POUs = append(request.POUs, stgen.AOSTPOURequest{GroupKey: group.Key, ModuleCount: len(group.Modules), ModuleIDs: []*int64{&id}})
 	}
-	stPlans, err := generator.PrepareAOSTPlans(plan, request)
+	stPlans, err := stgen.PrepareAOSTPlans(plan, request)
 	if err != nil {
 		panic(err)
 	}
-	st, err := gen.GenerateAOST(stPlans[0], generator.DefaultAOContext(), generator.IDRange{POUID: 40000})
+	st, err := (stgen.Generator{Config: config.Default()}).GenerateAOST(stPlans[0], addressing.DefaultAOContext(), xmlidentity.IDRange{POUID: 40000})
 	if err != nil {
 		panic(err)
 	}
 	write(target, "st.xml", st.XML)
-	ctx := generator.DefaultHMIContext()
-	hmiPlans, err := generator.PrepareAODiagnosticPlans(plan, []string{"3000_D_SC_B01"}, ctx)
+	ctx := hmigen.DefaultHMIContext()
+	hmiPlans, err := hmigen.PrepareAODiagnosticPlans(plan, []string{"3000_D_SC_B01"}, ctx)
 	if err != nil {
 		panic(err)
 	}
-	hmi, err := gen.GenerateAODiagnostic(hmiPlans[0], ctx, generator.DiagnosticIDRange{T11Start: 50000, CardStart: 60000, PageStart: 70000})
+	hmi, err := (hmigen.Generator{Config: config.Default()}).GenerateAODiagnostic(hmiPlans[0], ctx, xmlidentity.DiagnosticIDRange{T11Start: 50000, CardStart: 60000, PageStart: 70000})
 	if err != nil {
 		panic(err)
 	}
@@ -98,18 +103,18 @@ func main() {
 
 // writeModuleFixture builds the requested 32-channel DO graph from the real DIO-1 library.
 // Its synthetic PLC/module/tag values are test inputs, not application defaults.
-func writeModuleFixture(gen generator.Generator, ref *library.TemplateRef, target string) {
+func writeModuleFixture(gen fbdgen.Generator, ref *library.TemplateRef, target string) {
 	id := int64(17)
-	channels := make([]generator.LibraryDOChannelRequest, 32)
+	channels := make([]fbdgen.LibraryDOChannelRequest, 32)
 	for i := range channels {
-		channels[i] = generator.LibraryDOChannelRequest{Channel: i, Tag: fmt.Sprintf("_3101_MXI_%04dA_DDVH", 6001+i), Invert: true}
+		channels[i] = fbdgen.LibraryDOChannelRequest{Channel: i, Tag: fmt.Sprintf("_3101_MXI_%04dA_DDVH", 6001+i), Invert: true}
 	}
-	request := generator.LibraryDORequest{TemplateKey: ref.Key, PLCName: "2202_S_RC_C03", Context: &generator.GenerationContext{ControllerTypeName: generator.ControllerCPU850}, POUs: []generator.LibraryDOPOURequest{{Name: "DO_A70", Modules: []generator.LibraryDOModuleRequest{{Name: "A70-02", ID: &id, Channels: channels}}}}}
+	request := fbdgen.LibraryDORequest{TemplateKey: ref.Key, PLCName: "2202_S_RC_C03", Context: &fbdrequest.GenerationContext{ControllerTypeName: cpuprofile.ControllerCPU850}, POUs: []fbdgen.LibraryDOPOURequest{{Name: "DO_A70", Modules: []fbdgen.LibraryDOModuleRequest{{Name: "A70-02", ID: &id, Channels: channels}}}}}
 	plan, err := gen.PrepareLibraryDO(ref, request)
 	if err != nil {
 		panic(err)
 	}
-	result, err := gen.GenerateLibraryDO(plan, generator.IDRange{T11Start: 100000, CardStart: 200000, POUID: 300000})
+	result, err := gen.GenerateLibraryDO(plan, xmlidentity.IDRange{T11Start: 100000, CardStart: 200000, POUID: 300000})
 	if err != nil {
 		panic(err)
 	}

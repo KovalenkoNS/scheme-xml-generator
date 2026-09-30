@@ -3,12 +3,12 @@ package allocation
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 )
 
 // ValidateDocumentRanges Сверяет выделенные allocator диапазоны с потребностями подготовленного XML.
 // Останавливает генерацию при недопустимых началах или переполнении ID.
-func ValidateDocumentRanges(ids contracts.IDRange, requirements contracts.DocumentRequirements) error {
+func ValidateDocumentRanges(ids xmlidentity.IDRange, requirements xmlidentity.DocumentRequirements) error {
 	if ids.T11Start < 1 || ids.CardStart < 1 || ids.POUID < 1 {
 		return fmt.Errorf("начальные ID должны быть положительными")
 	}
@@ -22,12 +22,12 @@ func ValidateDocumentRanges(ids contracts.IDRange, requirements contracts.Docume
 	}
 	for _, item := range items {
 		if item.count == 0 {
-			if item.start > contracts.MaxTransportID+1 {
+			if item.start > xmlidentity.MaxTransportID+1 {
 				return fmt.Errorf("диапазон %s выходит за signed 32-bit", item.label)
 			}
 			continue
 		}
-		if item.start > contracts.MaxTransportID || item.start > contracts.MaxTransportID-int64(item.count)+1 {
+		if item.start > xmlidentity.MaxTransportID || item.start > xmlidentity.MaxTransportID-int64(item.count)+1 {
 			return fmt.Errorf("диапазон %s выходит за signed 32-bit", item.label)
 		}
 	}

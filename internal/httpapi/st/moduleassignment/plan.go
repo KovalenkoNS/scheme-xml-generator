@@ -3,19 +3,22 @@ package moduleassignment
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
+	"scheme-xml-generator/internal/generator/planning"
+	programcontext "scheme-xml-generator/internal/generator/program"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	ioctx "scheme-xml-generator/internal/httpapi/io/context"
-	modulemapping "scheme-xml-generator/internal/httpapi/io/modulemapping"
+	"scheme-xml-generator/internal/httpapi/io/modulemapping"
 	"scheme-xml-generator/internal/httpapi/limits"
 	"scheme-xml-generator/internal/inputs/assignments"
 )
 
 type assignmentPlan struct {
 	Input        assignmentInput
-	Plans        []generator.ControllerPlan
-	Context      generator.ProgramContext
-	Requirements []generator.DocumentRequirements
-	Total        generator.DocumentRequirements
+	Plans        []stassignment.ControllerPlan
+	Context      programcontext.ProgramContext
+	Requirements []xmlidentity.DocumentRequirements
+	Total        xmlidentity.DocumentRequirements
 	Warnings     []string
 }
 
@@ -30,7 +33,7 @@ func prepareAssignmentPlan(input assignmentInput) (assignmentPlan, error) {
 	if err != nil {
 		return assignmentPlan{}, err
 	}
-	plans, err := generator.PrepareModulePlans(source, request)
+	plans, err := planning.PrepareModulePlans(source, request)
 	if err != nil {
 		return assignmentPlan{}, err
 	}
@@ -39,10 +42,10 @@ func prepareAssignmentPlan(input assignmentInput) (assignmentPlan, error) {
 	if err != nil {
 		return assignmentPlan{}, err
 	}
-	requirements := make([]generator.DocumentRequirements, len(plans))
-	var total generator.DocumentRequirements
+	requirements := make([]xmlidentity.DocumentRequirements, len(plans))
+	var total xmlidentity.DocumentRequirements
 	for index, plan := range plans {
-		requirements[index], err = generator.RequirementsForController(plan)
+		requirements[index], err = planning.RequirementsForController(plan)
 		if err != nil {
 			return assignmentPlan{}, err
 		}

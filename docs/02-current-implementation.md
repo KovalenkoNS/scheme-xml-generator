@@ -16,7 +16,7 @@
 | Предметные данные | ПЛК, назначения, AO и инвентаризация без зависимости от Excel или HTTP | [assignments](../internal/domain/assignments/model.go), [analogoutput](../internal/domain/analogoutput/model.go), [inventory](../internal/domain/inventory/model.go) |
 | Входные адаптеры | TXT AO, XLSX IO и подготовленные/исходные карты назначений | [aomap](../internal/aomap/parser.go), [iomap](../internal/iomap/parser.go), [assignments](../internal/inputs/assignments/assignments.go), [XLSX](../internal/inputs/xlsx/workbook.go) |
 | Библиотека | Импорт XML, типы, шаблоны и согласованный снимок каталога | [repository.go](../internal/library/repository.go), [import.go](../internal/library/import.go), [catalog_snapshot.go](../internal/library/catalog_snapshot.go) |
-| Генерация | Планы, отдельные FBD/ST/HMI, адресация, XML и ID | [facade.go](../internal/generator/facade.go), [allocator.go](../internal/generator/allocation/allocator.go) |
+| Генерация | Самостоятельные FBD/ST/HMI и их запросы/результаты, адресация, XML и ID | [FBD](../internal/generator/fbd/service.go), [ST](../internal/generator/st/service.go), [HMI](../internal/generator/hmi/service.go), [allocator.go](../internal/generator/allocation/allocator.go) |
 | Дополнительный XLS | Технологические объекты и запись BIFF8/OLE без XML ID | [table.go](../internal/techobjects/table.go), [workbook.go](../internal/xls/workbook.go) |
 | Интерфейс | Две страницы, источники, библиотека, выпуск и просмотр файлов | [index.html](../web/index.html), [bootstrap.js](../web/shell/bootstrap.js), [embed.go](../web/embed.go) |
 
@@ -39,7 +39,7 @@ flowchart LR
     Viewer --> Import[Ручной импорт в SCADA]
 ```
 
-В текущем процессе нет клиента PostgreSQL или действующего обмена IO с Host. `/api/workspace` честно возвращает `host.connected:false`, `status:"contract-pending"`. Целевая цепочка получения данных: XML Generator → Host-client → Host-server → PostgreSQL. Локальный HTTP-сервер EXE не является Host-server. Поле XML `Project`, даже с путём к базе SCADA, — контекст экспорта, а не открытое соединение.
+Клиент PostgreSQL и обмен инженерными IO-данными пока не реализованы. При запуске из Host генератор читает `HOST_CLIENT_API_URL` и обновляет реальное состояние серверного соединения через `/api/device` оркестратора. `/api/host/session` и совместимое поле `host` в `/api/workspace` возвращают текущий снимок вместо постоянного `contract-pending`; [контракт соединения](integration/host-session.md). Соединение не означает готовность IO-данных для генерации. Целевая цепочка данных: XML Generator → Host-client → Host-server → PostgreSQL. Локальный HTTP-сервер EXE не является Host-server. Поле XML `Project`, даже с путём к базе SCADA, — контекст экспорта, а не открытое соединение.
 
 ## 2. Страницы и доступные результаты
 
@@ -82,6 +82,7 @@ Preview источника не является постоянным проек
 |---|---|---|
 | `GET /api/health` | Проверка процесса | `200 {ok:true}` |
 | `GET /api/workspace` | Фактические Common/Page и состояние Host | `200 {common,page,host}` |
+| `GET /api/host/session` | Свежий снимок соединения Host/Server без секретов и кэша | `200 {available,connected,authenticated,reachable,status,message,...}` |
 | `GET /api/templates` | Каталог | `200 {libraries,types,templates,errors}` |
 | `POST /api/libraries/import` | Один multipart `file`, XML | `201` новый файл либо `200` уже подключённые байты; `{file,created,catalog}` |
 | `POST /api/refresh` | Перечитать `libraries/` | `200` каталог |
@@ -107,7 +108,7 @@ Preview источника не является постоянным проек
 
 Отказ встроенного FBD сообщает: «FBD создаётся только из подключённой библиотеки. Выберите шаблон на основной странице». Метаданные исторических профилей в совместимом API не разрешают их выпуск. Проверка Origin выполняется раньше предметного маршрута, поэтому нелокальный Origin получает `403`, в том числе на отключённых адресах.
 
-`/api/generate` принимает одиночный библиотечный запрос или `pous`; смешивать эти форматы нельзя. В каждой POU передаются библиотечные `signals`. Прежнее `pous[].io.modules` добавляло фиксированные аппаратные FBD-блоки и назначало отсутствующие ModuleID; HTTP теперь отклоняет любую ненулевую секцию `io` с `410` до нормализации, разрешения библиотеки, резервирования ID и записи файла. Исторический внутренний алгоритм сохраняется только для регрессионных проверок. Контракты: [types.go](../internal/generator/contracts/types.go), [document.go](../internal/generator/contracts/document.go). Модульный DO выпускается через `/api/generate/library-do` с явно заданными ModuleID: [library_do.go](../internal/generator/fbd/library_do.go); `invert` — отдельный флаг канала.
+`/api/generate` принимает одиночный библиотечный запрос или `pous`; смешивать эти форматы нельзя. В каждой POU передаются библиотечные `signals`. Прежнее `pous[].io.modules` добавляло фиксированные аппаратные FBD-блоки и назначало отсутствующие ModuleID; HTTP отклоняет любую ненулевую секцию `io` с `410` до нормализации, разрешения библиотеки, резервирования ID и записи файла. Исторические утверждения хранятся как неисполняемый текст в tests/retired, фиксированный алгоритм удалён. Контракты: [запросы FBD](../internal/generator/fbd/request/requests.go), [диапазоны ID](../internal/generator/identity/ranges.go). Модульный DO выпускается через `/api/generate/library-do` с явно заданными ModuleID: [library_do.go](../internal/generator/fbd/library_do.go); `invert` — отдельный флаг канала.
 
 Multipart принимает ровно один `file`; настройки передаются JSON-строкой в текстовом поле, а не вторым файлом. Например, настройки ST назначений:
 

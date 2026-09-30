@@ -4,7 +4,8 @@ import * as _shared_dom from "../shared/dom.js";
 import * as _shell_preferences from "./preferences.js";
 import { state } from "./state.js";
 import * as _sources_model from "../sources/model.js";
-// Переключает две страницы по URL; основная показывает фактическое отсутствие контракта данных Host.
+import { renderSession } from "../host/view.js";
+// Переключает две страницы по URL; компонент Host сохраняет актуальный статус серверной сессии.
 export function page() {
   state.page = location.hash === "#local" ? "local" : "main";
   const local = state.page === "local";
@@ -14,6 +15,7 @@ export function page() {
   _shared_dom.$("remote-source").hidden = local; _shared_dom.$("local-source").hidden = !local; _shared_dom.$("library-open").hidden = local;
   _shared_dom.$("page-source").textContent = local ? "ЛОКАЛЬНЫЕ ДАННЫЕ" : "ДАННЫЕ HOST";
   _shared_dom.$("source-badge").textContent = local ? "Временный режим" : "Нет подключения";
+  renderSession();
   _shared_dom.$("validation").hidden = true; updateControllers();
 };
 

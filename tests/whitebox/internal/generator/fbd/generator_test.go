@@ -7,7 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator/contracts"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/library"
 	"strings"
@@ -92,7 +93,7 @@ func TestGenerateAllEightTemplates(t *testing.T) {
 			if !ok {
 				t.Fatal("template not resolved")
 			}
-			result, err := gen.Generate(ref, contracts.Request{ObjectName: "_TEST_OBJECT", NameMode: "base"}, contracts.IDRange{T11Start: 3100000 + int64(index)*1000, CardStart: 910000 + int64(index)*100, POUID: 110000 + int64(index)})
+			result, err := gen.Generate(ref, fbdrequest.Request{ObjectName: "_TEST_OBJECT", NameMode: "base"}, xmlidentity.IDRange{T11Start: 3100000 + int64(index)*1000, CardStart: 910000 + int64(index)*100, POUID: 110000 + int64(index)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -177,7 +178,7 @@ func TestADRNameAndKnownSignature(t *testing.T) {
 	if preview.BaseName != "_1110_LZIA_10101" || preview.MatchedPrefix != "_ADR" {
 		t.Fatalf("unexpected preview: %+v", preview)
 	}
-	result, err := (Generator{Config: config.Default()}).Generate(ref, contracts.Request{ObjectName: "_1110_LZIA_10101_ADR", POUName: "ADR_test", NameMode: "auto", Description: "Описание карточек"}, contracts.IDRange{T11Start: 3200000, CardStart: 920000, POUID: 120000})
+	result, err := (Generator{Config: config.Default()}).Generate(ref, fbdrequest.Request{ObjectName: "_1110_LZIA_10101_ADR", POUName: "ADR_test", NameMode: "auto", Description: "Описание карточек"}, xmlidentity.IDRange{T11Start: 3200000, CardStart: 920000, POUID: 120000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +225,7 @@ func TestPOUNameIsIndependentFromObjectName(t *testing.T) {
 		t.Fatal("template not resolved")
 	}
 	gen := Generator{Config: config.Default()}
-	result, err := gen.Generate(ref, contracts.Request{ObjectName: "_1110_LZIA_10101", NameMode: "base"}, contracts.IDRange{T11Start: 3300000, CardStart: 930000, POUID: 130000})
+	result, err := gen.Generate(ref, fbdrequest.Request{ObjectName: "_1110_LZIA_10101", NameMode: "base"}, xmlidentity.IDRange{T11Start: 3300000, CardStart: 930000, POUID: 130000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +240,7 @@ func TestPOUNameIsIndependentFromObjectName(t *testing.T) {
 	if strings.Contains(header.POU.Name, "1110_LZIA_10101") || !strings.HasPrefix(header.POU.Name, "POU_") {
 		t.Fatalf("default OnePOU NAME=%q must be independent from object name", header.POU.Name)
 	}
-	if _, err := gen.Generate(ref, contracts.Request{ObjectName: "_1110_LZIA_10101", POUName: "1110_invalid", NameMode: "base"}, contracts.IDRange{T11Start: 3400000, CardStart: 940000, POUID: 140000}); err == nil {
+	if _, err := gen.Generate(ref, fbdrequest.Request{ObjectName: "_1110_LZIA_10101", POUName: "1110_invalid", NameMode: "base"}, xmlidentity.IDRange{T11Start: 3400000, CardStart: 940000, POUID: 140000}); err == nil {
 		t.Fatal("POU name starting with a digit was accepted")
 	}
 }
@@ -265,7 +266,7 @@ func TestObjectRootUsesSCADACanonicalUppercase(t *testing.T) {
 	if preview.BaseName != "_1110_LZIA_10101_MAIN" {
 		t.Fatalf("canonical base=%q", preview.BaseName)
 	}
-	result, err := (Generator{Config: config.Default()}).Generate(ref, contracts.Request{ObjectName: "_1110_LZIA_10101_main", POUName: "AD3_test", NameMode: "base"}, contracts.IDRange{T11Start: 3500000, CardStart: 950000, POUID: 150000})
+	result, err := (Generator{Config: config.Default()}).Generate(ref, fbdrequest.Request{ObjectName: "_1110_LZIA_10101_main", POUName: "AD3_test", NameMode: "base"}, xmlidentity.IDRange{T11Start: 3500000, CardStart: 950000, POUID: 150000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -362,14 +363,14 @@ func assertSCADADialectOutput(t *testing.T, data []byte, fontCount int) {
 // to FBD APIs and requires rejection.
 func TestGeneratorEnforcesServerSideTextLengths(t *testing.T) {
 	ref := loadTemplateByID(t, "17510")
-	ids := contracts.IDRange{T11Start: 4_800_000, CardStart: 880_000, POUID: 280_000}
+	ids := xmlidentity.IDRange{T11Start: 4_800_000, CardStart: 880_000, POUID: 280_000}
 	if _, err := PreviewName(ref, strings.Repeat("A", 161), "base"); err == nil {
 		t.Fatal("object name longer than 160 characters was accepted")
 	}
-	if _, err := (Generator{Config: config.Default()}).Generate(ref, contracts.Request{ObjectName: "VALID", POUName: "VALID_POU", NameMode: "base", Description: strings.Repeat("D", 501)}, ids); err == nil {
+	if _, err := (Generator{Config: config.Default()}).Generate(ref, fbdrequest.Request{ObjectName: "VALID", POUName: "VALID_POU", NameMode: "base", Description: strings.Repeat("D", 501)}, ids); err == nil {
 		t.Fatal("description longer than 500 characters was accepted")
 	}
-	if _, err := (Generator{Config: config.Default()}).Generate(ref, contracts.Request{ObjectName: "VALID", POUName: "VALID_POU", NameMode: "base", ClusterPath: strings.Repeat("K", 501)}, ids); err == nil {
+	if _, err := (Generator{Config: config.Default()}).Generate(ref, fbdrequest.Request{ObjectName: "VALID", POUName: "VALID_POU", NameMode: "base", ClusterPath: strings.Repeat("K", 501)}, ids); err == nil {
 		t.Fatal("KLPath longer than 500 characters was accepted")
 	}
 }

@@ -5,15 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
-
+	"scheme-xml-generator/internal/generator/allocation"
+	"scheme-xml-generator/internal/generator/hmi"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	iosource "scheme-xml-generator/internal/httpapi/io/source"
-	"scheme-xml-generator/internal/iomap"
-
 	"scheme-xml-generator/internal/httpapi/limits"
 	"scheme-xml-generator/internal/httpapi/output"
-
 	"scheme-xml-generator/internal/httpapi/transport"
+	"scheme-xml-generator/internal/iomap"
 )
 
 // HandlePLCDiagnosticGenerate генерирует HMI-диагностику выбранных ПЛК из исходного IO XLSX.
@@ -46,7 +45,7 @@ func (s *Service) HandlePLCDiagnosticGenerate(w http.ResponseWriter, r *http.Req
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
-	plans, err := generator.PreparePLCDiagnosticPlans(source, selection.Controllers, ctx)
+	plans, err := hmi.PreparePLCDiagnosticPlans(source, selection.Controllers, ctx)
 	if err != nil {
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
@@ -62,7 +61,7 @@ func (s *Service) HandlePLCDiagnosticGenerate(w http.ResponseWriter, r *http.Req
 		return
 	}
 	items := make([]output.ControllerResult, len(plans))
-	_, err = s.Allocator.WithDiagnosticReservation(t11, cards, pages, func(ids generator.DiagnosticIDRange) error {
+	_, err = s.Allocator.WithDiagnosticReservation(t11, cards, pages, func(ids xmlidentity.DiagnosticIDRange) error {
 		for i, plan := range plans {
 			result, err := s.Generator.GeneratePLCDiagnostic(plan, ctx, ids)
 			if err != nil {
@@ -76,7 +75,7 @@ func (s *Service) HandlePLCDiagnosticGenerate(w http.ResponseWriter, r *http.Req
 		return nil
 	})
 	if err != nil {
-		var persistenceErr *generator.AllocatorPersistenceError
+		var persistenceErr *allocation.AllocatorPersistenceError
 		if errors.As(err, &persistenceErr) {
 			transport.WriteError(w, http.StatusInternalServerError, err)
 		} else {

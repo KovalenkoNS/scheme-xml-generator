@@ -23,10 +23,10 @@ import (
 func cpuProfileApplication(t *testing.T, configuredCPU string) (*Server, string, string, string) {
 	t.Helper()
 	application, statePath, outputDir := aoTestApplication(t)
-	application.generator.Config.Common.ControllerType = configuredCPU
-	application.generator.Config.Common.Project = "CPU profile test"
-	application.generator.Config.Common.ControllerID = "123"
-	application.generator.Config.Common.ResourceID = "456"
+	application.config.Common.ControllerType = configuredCPU
+	application.config.Common.Project = "CPU profile test"
+	application.config.Common.ControllerID = "123"
+	application.config.Common.ResourceID = "456"
 	application.repository = library.NewRepository(isolatedLibraryDirectory(t))
 	catalog, err := application.repository.Refresh()
 	if err != nil {
@@ -107,7 +107,7 @@ func TestCPUProfilesLibraryContextIsRequestScoped(t *testing.T) {
 		for _, configuredCPU := range []string{"", "TENIX-CPU715", "TENIX-CPU850", "existing-legacy-config"} {
 			t.Run(mode+"/configured="+configuredCPU, func(t *testing.T) {
 				application, _, _, key := cpuProfileApplication(t, configuredCPU)
-				originalConfig := application.generator.Config
+				originalConfig := application.config
 				for _, requestedCPU := range []string{"TENIX-CPU715", "TENIX-CPU850", " \tTENIX-CPU850\r\n"} {
 					payload := cpuProfileLibraryRequest(key, mode)
 					payload["context"] = map[string]any{"controllerTypeName": requestedCPU}
@@ -124,7 +124,7 @@ func TestCPUProfilesLibraryContextIsRequestScoped(t *testing.T) {
 							t.Errorf("CPU override lost configured context %s", expected)
 						}
 					}
-					if application.generator.Config != originalConfig {
+					if application.config != originalConfig {
 						t.Fatal("request changed the server's generator configuration")
 					}
 					// A later request without context must return to the configured CPU.
@@ -152,7 +152,7 @@ func TestCPUProfilesLibraryRejectsInvalidContextWithoutSideEffects(t *testing.T)
 	for _, mode := range []string{"legacy", "multi"} {
 		t.Run(mode, func(t *testing.T) {
 			application, statePath, outputDir, key := cpuProfileApplication(t, "TENIX-CPU715")
-			originalConfig := application.generator.Config
+			originalConfig := application.config
 			for _, context := range contexts {
 				payload := cpuProfileLibraryRequest(key, mode)
 				payload["context"] = json.RawMessage(context)
@@ -161,7 +161,7 @@ func TestCPUProfilesLibraryRejectsInvalidContextWithoutSideEffects(t *testing.T)
 					t.Fatalf("context=%s status=%d: %s", context, response.Code, response.Body.String())
 				}
 				assertNoAOOutputOrState(t, statePath, outputDir)
-				if application.generator.Config != originalConfig {
+				if application.config != originalConfig {
 					t.Fatalf("invalid context %s changed configuration", context)
 				}
 			}
@@ -248,7 +248,7 @@ func TestCPUProfilesRetiredPhysicalBindingsIgnoreCPUOverride(t *testing.T) {
 			repository, key := cpuProfilePhysicalLibrary(t, ioType)
 			application.repository = repository
 			for _, configuredCPU := range []string{"TENIX-CPU715", "TENIX-CPU850"} {
-				application.generator.Config.Common.ControllerType = configuredCPU
+				application.config.Common.ControllerType = configuredCPU
 				for _, requestedCPU := range []string{"", "TENIX-CPU715", "TENIX-CPU850"} {
 					payload := cpuProfileRetiredIORequest(key, ioType)
 					if requestedCPU != "" {

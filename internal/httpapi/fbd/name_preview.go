@@ -4,8 +4,7 @@ package fbd
 import (
 	"fmt"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
-
+	"scheme-xml-generator/internal/generator/fbd"
 	"scheme-xml-generator/internal/httpapi/transport"
 )
 
@@ -26,7 +25,7 @@ func (s *Service) HandlePreviewName(w http.ResponseWriter, r *http.Request) {
 		transport.WriteError(w, http.StatusNotFound, fmt.Errorf("шаблон не найден; обновите список библиотек"))
 		return
 	}
-	preview, err := generator.PreviewName(ref, request.ObjectName, request.NameMode)
+	preview, err := fbd.PreviewName(ref, request.ObjectName, request.NameMode)
 	if err != nil {
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return

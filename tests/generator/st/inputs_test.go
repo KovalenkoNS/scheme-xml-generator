@@ -3,8 +3,8 @@ package generator_test
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/contracts"
 	"scheme-xml-generator/internal/generator/planning"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/inputs/assignments"
 	"testing"
 )
@@ -24,11 +24,11 @@ func assignmentTestSource() *assignments.Plan {
 }
 
 // assignmentTestRequest задаёт явные уникальные ModuleID для всех выбранных групп тестового ST-запроса.
-func assignmentTestRequest(source *assignments.Plan, kind string) contracts.ModuleMappingRequest {
-	request := contracts.ModuleMappingRequest{Kind: kind}
+func assignmentTestRequest(source *assignments.Plan, kind string) stassignment.ModuleMappingRequest {
+	request := stassignment.ModuleMappingRequest{Kind: kind}
 	nextID := int64(0)
 	for _, group := range source.Groups {
-		choice := contracts.ModuleGroupRequest{GroupKey: group.Key}
+		choice := stassignment.ModuleGroupRequest{GroupKey: group.Key}
 		for range group.Modules {
 			id := nextID
 			if kind == "st" {
@@ -42,7 +42,7 @@ func assignmentTestRequest(source *assignments.Plan, kind string) contracts.Modu
 }
 
 // assignmentTestPlans вызывает реальный планировщик для тестового источника и прекращает сценарий при ошибке подготовки.
-func assignmentTestPlans(t *testing.T, kind string) []contracts.ControllerPlan {
+func assignmentTestPlans(t *testing.T, kind string) []stassignment.ControllerPlan {
 	t.Helper()
 	source := assignmentTestSource()
 	plans, err := planning.PrepareModulePlans(source, assignmentTestRequest(source, kind))
@@ -56,8 +56,8 @@ func assignmentTestPlans(t *testing.T, kind string) []contracts.ControllerPlan {
 func assignmentTestModuleCount(count int) *int { return &count }
 
 // assignmentTestGroupModules находит модули исходной группы в подготовленном плане для проверки расширения и коллизий.
-func assignmentTestGroupModules(plan contracts.ControllerPlan, key string) []contracts.PhysicalModule {
-	var modules []contracts.PhysicalModule
+func assignmentTestGroupModules(plan stassignment.ControllerPlan, key string) []stassignment.PhysicalModule {
+	var modules []stassignment.PhysicalModule
 	for _, pou := range plan.POUs {
 		if pou.GroupKey == key {
 			modules = append(modules, pou.Modules...)

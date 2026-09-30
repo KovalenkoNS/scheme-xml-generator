@@ -6,9 +6,11 @@ import * as _shell_bindings from "./bindings.js";
 import * as _shell_navigation from "./navigation.js";
 import * as _shell_preferences from "./preferences.js";
 import { state } from "./state.js";
+import { startSession } from "../host/session.js";
 // Читает фактическую конфигурацию и каталог сервера; объединяет их с локальными предпочтениями перед включением выпуска.
 export async function init() {
   _shell_bindings.bind(); _shell_navigation.page();
+  startSession();
   const responses = await Promise.allSettled([_shared_http.request("/api/workspace"), _shared_http.request("/api/templates")]);
   if (responses[0].status === "fulfilled") {
     const { common, page: configPage } = responses[0].value;

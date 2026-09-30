@@ -7,12 +7,15 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
 	"scheme-xml-generator/internal/generator/identifiers"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	moduleid "scheme-xml-generator/internal/generator/modules"
 	"scheme-xml-generator/internal/generator/planning"
+	programcontext "scheme-xml-generator/internal/generator/program"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"strconv"
@@ -22,13 +25,13 @@ import (
 // generateD32ModuleFBD собирает один D32 и диагностическую цепь на каждый модуль.
 // Получает проверенный план, ID и обязательные библиотечные метаданные; возвращает
 // проверенный XML с точной инверсией каналов, не записывая файлы или состояние allocator.
-func generateD32ModuleFBD(plan contracts.ControllerPlan, ctx contracts.ProgramContext, ids contracts.IDRange, req contracts.DocumentRequirements, profile *d32LibraryProfile) (contracts.Result, error) {
+func generateD32ModuleFBD(plan stassignment.ControllerPlan, ctx programcontext.ProgramContext, ids xmlidentity.IDRange, req xmlidentity.DocumentRequirements, profile *d32LibraryProfile) (xmlartifact.Result, error) {
 	if profile == nil {
-		return contracts.Result{}, fmt.Errorf("DO: библиотечный профиль не подготовлен")
+		return xmlartifact.Result{}, fmt.Errorf("DO: библиотечный профиль не подготовлен")
 	}
 	doc := xmlmodel.OutputDocument{XMLName: xml.Name{Local: "BufScadaPOUS"}, Common: xmlmodel.MappingCommon(ctx)}
 	doc.ISAObjects.Items = libraryDOTypeRecords(profile)
-	summary := contracts.ControllerSummary(plan, ctx, ids)
+	summary := stassignment.ControllerSummary(plan, ctx, ids)
 	summary.POUGroupID, summary.POUNumber = profile.groups[0], profile.numbers[0]
 	next := ids.T11Start
 	cards, cardNames := map[string]string{}, map[string]string{}
@@ -49,7 +52,7 @@ func generateD32ModuleFBD(plan contracts.ControllerPlan, ctx contracts.ProgramCo
 		id, number := ids.POUID+int64(index), strconv.FormatInt(firstNumber+int64(index), 10)
 		pou := xmlmodel.OutputPOU{ID: strconv.FormatInt(id, 10), Name: source.Name, IsFBD: "1", GroupID: ctx.GroupID, Enabled: "1", Number: number,
 			Params: xmlmodel.OutputPOUParams{DParams: "3", Height: "20000", Width: "2000", TemplatePage: "0", Background: "16777215", PrintWidth: "1944", PrintHeight: "1363", PrintPageA4: "8"}}
-		ps := contracts.POUSummary{POUID: id, POUName: source.Name, POUGroupID: ctx.GroupID, POUNumber: number, T11First: next, Signals: []contracts.SignalSummary{}}
+		ps := xmlartifact.POUSummary{POUID: id, POUName: source.Name, POUGroupID: ctx.GroupID, POUNumber: number, T11First: next, Signals: []xmlartifact.SignalSummary{}}
 		pou.GroupID, pou.Number = profile.groups[index], profile.numbers[index]
 		ps.POUGroupID, ps.POUNumber = pou.GroupID, pou.Number
 		localCards := map[string]bool{}
@@ -80,13 +83,13 @@ func generateD32ModuleFBD(plan contracts.ControllerPlan, ctx contracts.ProgramCo
 			link(physical, "0", quality, "QUAL", blockRightCenter(physical), blockLeftCenter(quality))
 			link(quality, "Result", digital, "sts", blockRightCenter(quality), point{X: 660, Y: y + 40})
 			pou.ISAGraf.Links.Items[len(pou.ISAGraf.Links.Items)-1].PointList.Points = fmt.Sprintf("(610,%d);(630,%d);(630,%d);(660,%d);", y+20, y+20, y+40, y+40)
-			ms := contracts.IOModuleSummary{Type: "DO", ID: *module.ID, BindingPrefix: physicalTag, InstanceName: module.Name, Capacity: 32, SignalCount: len(module.Channels), Blocks: 3, Links: 2, Cards: 2, T11First: moduleStart, T11Last: next - 1}
+			ms := xmlartifact.IOModuleSummary{Type: "DO", ID: *module.ID, BindingPrefix: physicalTag, InstanceName: module.Name, Capacity: 32, SignalCount: len(module.Channels), Blocks: 3, Links: 2, Cards: 2, T11First: moduleStart, T11Last: next - 1}
 			ms.CardFirst, _ = strconv.ParseInt(moduleCard, 10, 64)
 			ms.CardLast, _ = strconv.ParseInt(physicalCard, 10, 64)
 			ps.IOModules = append(ps.IOModules, ms)
 			for _, channel := range module.Channels {
 				moduleID, channelNumber := *module.ID, channel.Channel
-				ss := contracts.SignalSummary{TemplateKey: profile.templateKey, BaseName: channel.Tag, IOType: "DO", ModuleID: &moduleID, Channel: &channelNumber}
+				ss := xmlartifact.SignalSummary{TemplateKey: profile.templateKey, BaseName: channel.Tag, IOType: "DO", ModuleID: &moduleID, Channel: &channelNumber}
 				if !planning.IsSyntheticReserve(channel) {
 					start, cardCount := next, len(cards)
 					ownerCard := card(channel.Tag)
@@ -126,18 +129,18 @@ func generateD32ModuleFBD(plan contracts.ControllerPlan, ctx contracts.ProgramCo
 	summary.Cards, summary.T11First, summary.T11Last = len(cards), ids.T11Start, next-1
 	summary.CardFirst, summary.CardLast = ids.CardStart, ids.CardStart+int64(len(cards))-1
 	if next-ids.T11Start != int64(req.T11Count) || len(cards) != req.CardCount {
-		return contracts.Result{}, fmt.Errorf("Модули native850: расчёт FBD ID не совпал с результатом")
+		return xmlartifact.Result{}, fmt.Errorf("Модули native850: расчёт FBD ID не совпал с результатом")
 	}
 	data, err := xmlcodec.SerializeSCADAValue(doc)
 	if err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	if err := validateD32ModuleFBD(data, doc, req.T11Count, profile); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	warnings := append([]string(nil), plan.Warnings...)
 	warnings = append(warnings, "DO FBD: типы BOOL/D32/QUAL_STAT получены из выбранной библиотеки. Один D32 на модуль; инверсия задаётся отдельно для канала. Quality канала 0 использует подтверждённый драйвер CPU850/Measurement. Импорт и выполнение в SCADA требуют отдельной проверки.")
-	return contracts.Result{XML: data, BaseName: "LIBRARY_DO_" + plan.ControllerName, Summary: summary, Warnings: warnings}, nil
+	return xmlartifact.Result{XML: data, BaseName: "LIBRARY_DO_" + plan.ControllerName, Summary: summary, Warnings: warnings}, nil
 }
 
 var doQualityPattern = regexp.MustCompile(`^_IO_I(0|[1-9][0-9]*)_DO32P_0_VAL_DIAG$`)
@@ -161,7 +164,7 @@ func validateD32ModuleFBD(data []byte, expected xmlmodel.OutputDocument, count i
 	}
 	validID := func(value string) bool {
 		id, err := strconv.ParseInt(value, 10, 64)
-		return err == nil && id > 0 && id <= contracts.MaxTransportID
+		return err == nil && id > 0 && id <= xmlidentity.MaxTransportID
 	}
 	wantTypes := libraryDOTypeRecords(profile)
 	if actual.Common.ControllerType != cpuprofile.ControllerCPU850 || !reflect.DeepEqual(actual.ISAObjects.Items, wantTypes) || len(actual.POUS.Items) == 0 || actual.FontStyles != nil {
@@ -200,7 +203,7 @@ func validateD32ModuleFBD(data []byte, expected xmlmodel.OutputDocument, count i
 				valid = p.ISAObjectID == "6127" && p.CI == "0" && p.CO == "1" && p.Text == ".Quality" && p.Initial == nil && card.ID != "" && block.Info == card.Info+p.Text && len(match) == 2 && !called[p.CardID]
 				if valid {
 					physicalID, err := strconv.ParseInt(match[1], 10, 64)
-					valid = err == nil && physicalID <= contracts.MaxTransportID
+					valid = err == nil && physicalID <= xmlidentity.MaxTransportID
 				}
 				called[p.CardID] = true
 			case "31":

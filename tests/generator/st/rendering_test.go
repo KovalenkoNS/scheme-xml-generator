@@ -6,11 +6,11 @@ import (
 	"encoding/xml"
 	"fmt"
 	"reflect"
-	"scheme-xml-generator/internal/generator"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/planning"
+	stgen "scheme-xml-generator/internal/generator/st"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"scheme-xml-generator/internal/inputs/assignments"
@@ -34,10 +34,10 @@ func TestModuleSTNativeCPU850AssignmentsAndSnapshot(t *testing.T) {
 	source.Groups[0].Modules[0].Channels[0].Tag = "CORRUPTED"
 	*request.POUs[0].ModuleIDs[0] = 999
 	req, err := planning.RequirementsForController(plans[0])
-	if err != nil || req != (contracts.DocumentRequirements{POUCount: 2, SignalCount: 6}) {
+	if err != nil || req != (xmlidentity.DocumentRequirements{POUCount: 2, SignalCount: 6}) {
 		t.Fatalf("requirements %+v: %v", req, err)
 	}
-	result, err := (generator.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 1000})
+	result, err := (stgen.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 1000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestModuleSTControllerProfilesPreserveSparseAIAndMapAllDOChannels(t *testin
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := addressing.DefaultModuleContext()
 			ctx.ControllerTypeName, ctx.PhysicalProfile = tc.cpu, tc.profile
-			result, err := (generator.Generator{}).GenerateModuleMapping(plan, ctx, contracts.IDRange{POUID: 1000})
+			result, err := (stgen.Generator{}).GenerateModuleMapping(plan, ctx, xmlidentity.IDRange{POUID: 1000})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -185,7 +185,7 @@ func TestModuleDOFullPhysicalChannelsWithMissingTailAndHoles(t *testing.T) {
 		t.Run(tc.cpu+"/"+tc.profile, func(t *testing.T) {
 			ctx := addressing.DefaultModuleContext()
 			ctx.ControllerTypeName, ctx.PhysicalProfile = tc.cpu, tc.profile
-			result, err := (generator.Generator{}).GenerateModuleMapping(plan, ctx, contracts.IDRange{POUID: 100})
+			result, err := (stgen.Generator{}).GenerateModuleMapping(plan, ctx, xmlidentity.IDRange{POUID: 100})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -235,7 +235,7 @@ func TestModuleDIC1C2ShareOwnerAcrossPOUs(t *testing.T) {
 		if plan.SignalCount != 2 || plan.AssignmentCount != 66 || plan.RepeatedAssignmentCount != 0 {
 			t.Fatalf("paired receiver counts: %+v", plan)
 		}
-		result, err := (generator.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+		result, err := (stgen.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -266,7 +266,7 @@ func TestModuleDIEmptySpareOnlyModules(t *testing.T) {
 		if plan.ModuleCount != 2 || plan.SignalCount != 0 || plan.AssignmentCount != 66 || plan.RepeatedAssignmentCount != 0 {
 			t.Fatalf("spare-only counts: %+v", plan)
 		}
-		result, err := (generator.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
+		result, err := (stgen.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 100, T11Start: 200, CardStart: 300})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -2,8 +2,8 @@
 package fbd
 
 import (
-	"scheme-xml-generator/internal/generator/contracts"
-
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"scheme-xml-generator/internal/library"
 )
@@ -11,9 +11,9 @@ import (
 type singleBuild struct {
 	generator                                    Generator
 	ref                                          *library.TemplateRef
-	request                                      contracts.Request
-	ids                                          contracts.IDRange
-	preview                                      contracts.NamePreview
+	request                                      fbdrequest.Request
+	ids                                          xmlidentity.IDRange
+	preview                                      fbdrequest.NamePreview
 	pouName                                      string
 	layout                                       library.LayoutBounds
 	dx, dy                                       int

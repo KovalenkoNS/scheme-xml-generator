@@ -12,12 +12,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/generator/hmi"
+	"scheme-xml-generator/internal/iomap"
 	"strings"
 	"testing"
 	"unicode/utf8"
-
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/iomap"
 )
 
 // plcDiagnosticMultipart constructs a named workbook upload and options for the PLC-diagnostic or assignment HTTP
@@ -368,7 +367,7 @@ func TestPLCDiagnosticAPIActualFullIOAllControllers(t *testing.T) {
 	for _, c := range source.Controllers {
 		selected = append(selected, iomap.Selection{Key: c.Key})
 	}
-	prepared, err := generator.PreparePLCDiagnosticPlans(source, selected, generator.DefaultHMIContext())
+	prepared, err := hmi.PreparePLCDiagnosticPlans(source, selected, hmi.DefaultHMIContext())
 	if err != nil {
 		t.Fatal(err)
 	}

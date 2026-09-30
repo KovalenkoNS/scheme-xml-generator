@@ -6,44 +6,52 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/allocation"
+	fbdgen "scheme-xml-generator/internal/generator/fbd"
+	hmigen "scheme-xml-generator/internal/generator/hmi"
+	stgen "scheme-xml-generator/internal/generator/st"
 	"scheme-xml-generator/internal/httpapi/catalog"
 	"scheme-xml-generator/internal/httpapi/fbd"
 	"scheme-xml-generator/internal/httpapi/hmi"
+	hostapi "scheme-xml-generator/internal/httpapi/host"
 	ioao "scheme-xml-generator/internal/httpapi/io/ao"
-	modulemapping "scheme-xml-generator/internal/httpapi/io/modulemapping"
+	"scheme-xml-generator/internal/httpapi/io/modulemapping"
 	iosource "scheme-xml-generator/internal/httpapi/io/source"
 	"scheme-xml-generator/internal/httpapi/output"
 	"scheme-xml-generator/internal/httpapi/st"
-	moduleassignment "scheme-xml-generator/internal/httpapi/st/moduleassignment"
+	"scheme-xml-generator/internal/httpapi/st/moduleassignment"
 	techobjectapi "scheme-xml-generator/internal/httpapi/techobjects"
 	"scheme-xml-generator/internal/httpapi/transport"
 	"scheme-xml-generator/internal/httpapi/workspace"
+	"scheme-xml-generator/internal/integration/hostclient"
 	"scheme-xml-generator/internal/library"
 )
 
 type Server struct {
 	repository *library.Repository
-	generator  generator.Generator
-	allocator  *generator.Allocator
+	config     config.Config
+	allocator  *allocation.Allocator
 	output     *output.Store
 	staticFS   fs.FS
+	host       *hostclient.Client
 }
 
 // New получает зависимости независимого генератора при запуске приложения.
 // Возвращает сборщик HTTP-компонентов; каталог вывода обслуживается единственным output.Store.
-func New(repository *library.Repository, xmlGenerator generator.Generator, allocator *generator.Allocator, outputDir string, staticFS fs.FS, logger *log.Logger) *Server {
-	return &Server{repository: repository, generator: xmlGenerator, allocator: allocator, output: output.New(outputDir, logger), staticFS: staticFS}
+func New(repository *library.Repository, settings config.Config, allocator *allocation.Allocator, outputDir string, staticFS fs.FS, logger *log.Logger) *Server {
+	return &Server{repository: repository, config: settings, allocator: allocator, output: output.New(outputDir, logger), staticFS: staticFS, host: hostclient.FromEnvironment()}
 }
 
 // Handler собирает предметные HTTP-сервисы с текущими настройками и прежними адресами API.
 // Возвращает маршрутизатор с защитными заголовками; обработка библиотеки, IO и XML живёт в отдельных пакетах.
 func (s *Server) Handler() http.Handler {
 	libraryAPI := catalog.Service{Repository: s.repository}
-	workspaceAPI := workspace.Service{Generator: &s.generator}
-	fbdAPI := fbd.Service{Repository: s.repository, Generator: &s.generator, Allocator: s.allocator, Output: s.output}
-	stAPI := st.Service{Generator: &s.generator, Allocator: s.allocator, Output: s.output}
-	hmiAPI := hmi.Service{Generator: &s.generator, Allocator: s.allocator, Output: s.output}
+	workspaceAPI := workspace.Service{Config: &s.config, Host: s.host}
+	hostAPI := hostapi.Service{Client: s.host}
+	fbdAPI := fbd.Service{Repository: s.repository, Generator: &fbdgen.Generator{Config: s.config}, Allocator: s.allocator, Output: s.output}
+	stAPI := st.Service{Generator: &stgen.Generator{Config: s.config}, Allocator: s.allocator, Output: s.output}
+	hmiAPI := hmi.Service{Generator: &hmigen.Generator{Config: s.config}, Allocator: s.allocator, Output: s.output}
 	aoAPI := ioao.Service{}
 	sourceAPI := iosource.Service{}
 	moduleMapAPI := modulemapping.Service{}
@@ -56,6 +64,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/templates", libraryAPI.HandleTemplates)
 	mux.HandleFunc("GET /api/workspace", workspaceAPI.HandleWorkspace)
+	mux.HandleFunc("GET /api/host/session", hostAPI.HandleSession)
 	mux.HandleFunc("POST /api/libraries/import", transport.LocalPOST(libraryAPI.HandleLibraryImport))
 	mux.HandleFunc("POST /api/refresh", transport.LocalPOST(libraryAPI.HandleRefresh))
 	mux.HandleFunc("POST /api/preview-name", transport.LocalPOST(fbdAPI.HandlePreviewName))

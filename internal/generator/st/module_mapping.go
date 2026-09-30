@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"reflect"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	moduleid "scheme-xml-generator/internal/generator/modules"
-
+	programcontext "scheme-xml-generator/internal/generator/program"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"strconv"
@@ -18,7 +20,7 @@ import (
 
 // doAssignment Формирует ST-присваивание для одного DO-канала физического модуля.
 // Использует выбранный профиль адресации и имя экземпляра ПЛК/модуля.
-func doAssignment(controllerName string, module contracts.PhysicalModule, channel int, profile string) string {
+func doAssignment(controllerName string, module stassignment.PhysicalModule, channel int, profile string) string {
 	if profile == addressing.PhysicalProfileLegacy {
 		return fmt.Sprintf("_IO_QU%d_%d.Value := %s._%02d;", *module.ID, channel, moduleid.ModuleInstanceTag(controllerName, module.Name), channel)
 	}
@@ -45,20 +47,20 @@ func bindingPrefix(kind, profile string, id int64) string {
 
 // GenerateModuleST Создаёт ST-программы перекладок по проверенному плану AI/DI/DO.
 // Использует контекст и выделенные POU ID, возвращает структурно проверенный XML и сводку.
-func GenerateModuleST(plan contracts.ControllerPlan, ctx contracts.ProgramContext, ids contracts.IDRange) (contracts.Result, error) {
+func GenerateModuleST(plan stassignment.ControllerPlan, ctx programcontext.ProgramContext, ids xmlidentity.IDRange) (xmlartifact.Result, error) {
 	doc := xmlmodel.OutputSTDocument{XMLName: xml.Name{Local: "BufScadaPOUS"}, Common: xmlmodel.MappingCommon(ctx)}
-	summary := contracts.ControllerSummary(plan, ctx, ids)
+	summary := stassignment.ControllerSummary(plan, ctx, ids)
 	firstNumber, _ := strconv.ParseInt(ctx.POUNumber, 10, 32)
 	hasAI, hasDI := false, false
 	for index, pou := range plan.POUs {
 		id, number := ids.POUID+int64(index), strconv.FormatInt(firstNumber+int64(index), 10)
-		ps := contracts.POUSummary{POUID: id, POUName: pou.Name, POUGroupID: ctx.GroupID, POUNumber: number, Signals: []contracts.SignalSummary{}}
+		ps := xmlartifact.POUSummary{POUID: id, POUName: pou.Name, POUGroupID: ctx.GroupID, POUNumber: number, Signals: []xmlartifact.SignalSummary{}}
 		var code strings.Builder
 		fmt.Fprintf(&code, "PROGRAM %s\n\n", pou.Name)
 		for _, module := range pou.Modules {
 			fmt.Fprintf(&code, "(* %s *)\n", strings.ReplaceAll(module.Name, "-", "_"))
 			prefix := bindingPrefix(pou.Kind, ctx.PhysicalProfile, *module.ID)
-			ps.IOModules = append(ps.IOModules, contracts.IOModuleSummary{Type: pou.Kind, ID: *module.ID, BindingPrefix: prefix, InstanceName: module.Name, Capacity: module.Capacity, SignalCount: len(module.Channels)})
+			ps.IOModules = append(ps.IOModules, xmlartifact.IOModuleSummary{Type: pou.Kind, ID: *module.ID, BindingPrefix: prefix, InstanceName: module.Name, Capacity: module.Capacity, SignalCount: len(module.Channels)})
 			if pou.Kind == "DI" {
 				hasDI = true
 				tag := moduleid.ModuleInstanceTag(plan.ControllerName, module.Name)
@@ -81,7 +83,7 @@ func GenerateModuleST(plan contracts.ControllerPlan, ctx contracts.ProgramContex
 					}
 				}
 				moduleID, channelNumber := *module.ID, channel.Channel
-				ps.Signals = append(ps.Signals, contracts.SignalSummary{TemplateKey: "assignments:ST:" + pou.Kind, BaseName: channel.Tag, IOType: pou.Kind, ModuleID: &moduleID, Channel: &channelNumber})
+				ps.Signals = append(ps.Signals, xmlartifact.SignalSummary{TemplateKey: "assignments:ST:" + pou.Kind, BaseName: channel.Tag, IOType: pou.Kind, ModuleID: &moduleID, Channel: &channelNumber})
 			}
 			code.WriteByte('\n')
 		}
@@ -91,21 +93,21 @@ func GenerateModuleST(plan contracts.ControllerPlan, ctx contracts.ProgramContex
 	}
 	data, err := xmlcodec.SerializeSCADAValue(doc)
 	if err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	var actual xmlmodel.OutputSTDocument
 	if err := xml.Unmarshal(bytes.TrimPrefix(data, xmlcodec.Utf8BOM), &actual); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	if !reflect.DeepEqual(actual, doc) || bytes.Contains(data, []byte("<ISAGraf")) || bytes.Contains(data, []byte("<ISACARDSINFO")) {
-		return contracts.Result{}, fmt.Errorf("Модули: ST XML изменился при сериализации")
+		return xmlartifact.Result{}, fmt.Errorf("Модули: ST XML изменился при сериализации")
 	}
 	assignments := 0
 	for _, pou := range actual.POUS.Items {
 		assignments += strings.Count(pou.Code, ":=")
 	}
 	if assignments != plan.AssignmentCount {
-		return contracts.Result{}, fmt.Errorf("Модули: неверное число ST присваиваний")
+		return xmlartifact.Result{}, fmt.Errorf("Модули: неверное число ST присваиваний")
 	}
 	warnings := append([]string(nil), plan.Warnings...)
 	warnings = append(warnings, "ST назначений сохраняет перечисленные в Excel каналы AI и назначает все каналы добавленных резервных AI-модулей. DO назначает все 32 физических выхода каждого модуля через D32V_v1._00…_31 независимо от заполнения карты FBD. DI назначает Stat и все 32 входа i00…i31 каждого D32V_v1, включая каналы без FBD-получателя. Объекты AD3_v2 и D32V_v1 должны существовать.",
@@ -118,5 +120,5 @@ func GenerateModuleST(plan contracts.ControllerPlan, ctx contracts.ProgramContex
 	if hasDI {
 		warnings = append(warnings, "DI ST использует ANY_TO_DWORD для преобразования QUAL_STAT канала 0 в Stat модуля; проверьте наличие обеих функций и выполнение ST перед соответствующим FBD.")
 	}
-	return contracts.Result{XML: data, BaseName: "MODULE_ASSIGNMENTS_ST", Summary: summary, Warnings: warnings}, nil
+	return xmlartifact.Result{XML: data, BaseName: "MODULE_ASSIGNMENTS_ST", Summary: summary, Warnings: warnings}, nil
 }

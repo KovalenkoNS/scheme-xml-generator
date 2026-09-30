@@ -1,8 +1,11 @@
-// Планы модулей связывают выбранные POU, модули и каналы с общим результатом FBD/ST.
-package contracts
+// Планы физических ST-назначений выбранного ПЛК и сводка их выпуска; исходные форматы не входят в модель.
+package assignment
 
 import (
 	"scheme-xml-generator/internal/domain/assignments"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
+	programcontext "scheme-xml-generator/internal/generator/program"
 )
 
 // ModuleMappingRequest выбирает физические ST-назначения и явные ModuleID в порядке предварительного просмотра.
@@ -49,6 +52,6 @@ type PhysicalModule struct {
 
 // ControllerSummary Собирает сводку выбранных модулей и диапазонов ID для ответа генератора модулей.
 // Использует подготовленный план и контекст ПЛК, не меняет XML или состояние allocator.
-func ControllerSummary(plan ControllerPlan, ctx ProgramContext, ids IDRange) Summary {
-	return Summary{POUCount: len(plan.POUs), IOModuleCount: plan.ModuleCount, SignalCount: plan.SignalCount, POUID: ids.POUID, POUName: plan.POUs[0].Name, POUGroupID: ctx.GroupID, POUNumber: ctx.POUNumber, POUs: []POUSummary{}}
+func ControllerSummary(plan ControllerPlan, ctx programcontext.ProgramContext, ids xmlidentity.IDRange) xmlartifact.Summary {
+	return xmlartifact.Summary{POUCount: len(plan.POUs), IOModuleCount: plan.ModuleCount, SignalCount: plan.SignalCount, POUID: ids.POUID, POUName: plan.POUs[0].Name, POUGroupID: ctx.GroupID, POUNumber: ctx.POUNumber, POUs: []xmlartifact.POUSummary{}}
 }

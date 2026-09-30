@@ -13,14 +13,18 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/appserver"
+	"scheme-xml-generator/internal/config"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	"scheme-xml-generator/internal/generator/addressing"
+	"scheme-xml-generator/internal/generator/allocation"
+	"scheme-xml-generator/internal/generator/fbd"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
+	"scheme-xml-generator/internal/library"
 	"strings"
 	"testing"
 	"testing/fstest"
-
-	"scheme-xml-generator/internal/appserver"
-	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/library"
 )
 
 // Расширяет синтетический DIO-1 библиотечным определением QUAL_STAT.
@@ -36,14 +40,14 @@ func moduleLibrary() *library.TemplateRef {
 
 // Создаёт запрос одного DO-модуля с 32 позициями каналов для теста.
 // Возвращает CPU850/Measurement, явный ModuleID и независимые имена BOOL.
-func moduleRequest(ref *library.TemplateRef) generator.LibraryDORequest {
+func moduleRequest(ref *library.TemplateRef) fbd.LibraryDORequest {
 	id := int64(17)
 	group, number := int64(45), int64(60)
-	channels := make([]generator.LibraryDOChannelRequest, 32)
+	channels := make([]fbd.LibraryDOChannelRequest, 32)
 	for i := range channels {
-		channels[i] = generator.LibraryDOChannelRequest{Channel: i, Tag: fmt.Sprintf("_CPU_TAG_%02d_DDVH", i), Invert: true}
+		channels[i] = fbd.LibraryDOChannelRequest{Channel: i, Tag: fmt.Sprintf("_CPU_TAG_%02d_DDVH", i), Invert: true}
 	}
-	return generator.LibraryDORequest{TemplateKey: ref.Key, PLCName: "CPU", Context: &generator.GenerationContext{ControllerTypeName: generator.ControllerCPU850}, PhysicalProfile: generator.PhysicalProfileMeasurement, POUs: []generator.LibraryDOPOURequest{{Name: "DO_PROGRAM", GroupID: &group, POUNumber: &number, Modules: []generator.LibraryDOModuleRequest{{Name: "A13-01", ID: &id, Channels: channels}}}}}
+	return fbd.LibraryDORequest{TemplateKey: ref.Key, PLCName: "CPU", Context: &fbdrequest.GenerationContext{ControllerTypeName: cpuprofile.ControllerCPU850}, PhysicalProfile: addressing.PhysicalProfileMeasurement, POUs: []fbd.LibraryDOPOURequest{{Name: "DO_PROGRAM", GroupID: &group, POUNumber: &number, Modules: []fbd.LibraryDOModuleRequest{{Name: "A13-01", ID: &id, Channels: channels}}}}}
 }
 
 // Проверяет модульную схему: 32 BOOL/NOT, один D32 и одна диагностика.
@@ -52,7 +56,7 @@ func TestLibraryDOThirtyTwoSignalsUseOneD32AndOneQualityChain(t *testing.T) {
 	ref := moduleLibrary()
 	request := moduleRequest(ref)
 	before, _ := json.Marshal(ref)
-	g := generator.Generator{Config: config.Default()}
+	g := fbd.Generator{Config: config.Default()}
 	plan, err := g.PrepareLibraryDO(ref, request)
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +64,7 @@ func TestLibraryDOThirtyTwoSignalsUseOneD32AndOneQualityChain(t *testing.T) {
 	if got := plan.Requirements(); got.T11Count != 133 || got.CardCount != 34 || got.SignalCount != 32 || got.POUCount != 1 {
 		t.Fatalf("requirements=%+v", got)
 	}
-	result, err := g.GenerateLibraryDO(plan, generator.IDRange{T11Start: 100, CardStart: 1000, POUID: 2000})
+	result, err := g.GenerateLibraryDO(plan, xmlidentity.IDRange{T11Start: 100, CardStart: 1000, POUID: 2000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,8 +131,8 @@ func TestLibraryDOMultipleModulesKeepHolesInversionAndSharedTags(t *testing.T) {
 	ref := moduleLibrary()
 	request := moduleRequest(ref)
 	id := int64(18)
-	request.POUs[0].Modules = append(request.POUs[0].Modules, generator.LibraryDOModuleRequest{Name: "A13-02", ID: &id, Channels: []generator.LibraryDOChannelRequest{{Channel: 0, Tag: "_CPU_TAG_00_DDVH", Invert: false}, {Channel: 31, Tag: "_CPU_EXTRA", Invert: true}}})
-	g := generator.Generator{Config: config.Default()}
+	request.POUs[0].Modules = append(request.POUs[0].Modules, fbd.LibraryDOModuleRequest{Name: "A13-02", ID: &id, Channels: []fbd.LibraryDOChannelRequest{{Channel: 0, Tag: "_CPU_TAG_00_DDVH", Invert: false}, {Channel: 31, Tag: "_CPU_EXTRA", Invert: true}}})
+	g := fbd.Generator{Config: config.Default()}
 	plan, err := g.PrepareLibraryDO(ref, request)
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +140,7 @@ func TestLibraryDOMultipleModulesKeepHolesInversionAndSharedTags(t *testing.T) {
 	if got := plan.Requirements(); got.T11Count != 144 || got.CardCount != 37 {
 		t.Fatalf("requirements=%+v", got)
 	}
-	result, err := g.GenerateLibraryDO(plan, generator.IDRange{T11Start: 100, CardStart: 1000, POUID: 2000})
+	result, err := g.GenerateLibraryDO(plan, xmlidentity.IDRange{T11Start: 100, CardStart: 1000, POUID: 2000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,11 +178,11 @@ func TestLibraryDOMultipleModulesKeepHolesInversionAndSharedTags(t *testing.T) {
 // Проверяет отказ подготовки плана при неполной библиотеке и неверном оборудовании.
 // Охватывает QUAL_STAT, ModuleID, повторный канал и неподтверждённый CPU/драйвер.
 func TestLibraryDORejectsMissingMetadataAndInvalidHardware(t *testing.T) {
-	cases := map[string]func(*library.TemplateRef, *generator.LibraryDORequest){
-		"missing QUAL_STAT": func(ref *library.TemplateRef, _ *generator.LibraryDORequest) {
+	cases := map[string]func(*library.TemplateRef, *fbd.LibraryDORequest){
+		"missing QUAL_STAT": func(ref *library.TemplateRef, _ *fbd.LibraryDORequest) {
 			ref.Library.Document.Sections[0].Other.ObjectTypes = ref.Library.Document.Sections[0].Other.ObjectTypes[:1]
 		},
-		"conflicting QUAL_STAT": func(ref *library.TemplateRef, _ *generator.LibraryDORequest) {
+		"conflicting QUAL_STAT": func(ref *library.TemplateRef, _ *fbd.LibraryDORequest) {
 			owner := ref.Library.Document.Sections[0].Other.ObjectTypes[1]
 			other := owner
 			other.Templates = library.Templates{Items: append([]library.Template(nil), owner.Templates.Items...)}
@@ -186,15 +190,15 @@ func TestLibraryDORejectsMissingMetadataAndInvalidHardware(t *testing.T) {
 			other.Templates.Items[0].Contents.Primitives[0].ISAObjectID = "777"
 			ref.Library.Document.Sections[0].Other.ObjectTypes = append(ref.Library.Document.Sections[0].Other.ObjectTypes, other)
 		},
-		"missing ModuleID": func(_ *library.TemplateRef, request *generator.LibraryDORequest) { request.POUs[0].Modules[0].ID = nil },
-		"duplicate channel": func(_ *library.TemplateRef, request *generator.LibraryDORequest) {
+		"missing ModuleID": func(_ *library.TemplateRef, request *fbd.LibraryDORequest) { request.POUs[0].Modules[0].ID = nil },
+		"duplicate channel": func(_ *library.TemplateRef, request *fbd.LibraryDORequest) {
 			request.POUs[0].Modules[0].Channels[1].Channel = 0
 		},
-		"unsupported CPU715": func(_ *library.TemplateRef, request *generator.LibraryDORequest) {
-			request.Context.ControllerTypeName = generator.ControllerCPU715
+		"unsupported CPU715": func(_ *library.TemplateRef, request *fbd.LibraryDORequest) {
+			request.Context.ControllerTypeName = cpuprofile.ControllerCPU715
 		},
-		"unsupported driver": func(_ *library.TemplateRef, request *generator.LibraryDORequest) {
-			request.PhysicalProfile = generator.PhysicalProfileLegacy
+		"unsupported driver": func(_ *library.TemplateRef, request *fbd.LibraryDORequest) {
+			request.PhysicalProfile = addressing.PhysicalProfileLegacy
 		},
 	}
 	for name, change := range cases {
@@ -202,7 +206,7 @@ func TestLibraryDORejectsMissingMetadataAndInvalidHardware(t *testing.T) {
 			ref := moduleLibrary()
 			request := moduleRequest(ref)
 			change(ref, &request)
-			if _, err := (generator.Generator{Config: config.Default()}).PrepareLibraryDO(ref, request); err == nil {
+			if _, err := (fbd.Generator{Config: config.Default()}).PrepareLibraryDO(ref, request); err == nil {
 				t.Fatal("accepted unsupported request")
 			}
 		})
@@ -242,14 +246,14 @@ func TestLibraryDOHTTPAllocatesOnceAndPersistsModuleGraph(t *testing.T) {
 		t.Fatal("template missing")
 	}
 	statePath := filepath.Join(root, "state.json")
-	allocator, err := generator.NewAllocator(statePath, config.Default().IDs)
+	allocator, err := allocation.NewAllocator(statePath, config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := appserver.New(repository, generator.Generator{Config: config.Default()}, allocator, outputDir, fstest.MapFS{}, log.New(io.Discard, "", 0))
+	app := appserver.New(repository, config.Default(), allocator, outputDir, fstest.MapFS{}, log.New(io.Discard, "", 0))
 	request := moduleRequest(ref)
 	request.TemplateKey = key
-	post := func(value generator.LibraryDORequest) *httptest.ResponseRecorder {
+	post := func(value fbd.LibraryDORequest) *httptest.ResponseRecorder {
 		data, _ := json.Marshal(value)
 		response := httptest.NewRecorder()
 		incoming := httptest.NewRequest(http.MethodPost, "http://localhost/api/generate/library-do", bytes.NewReader(data))
@@ -318,12 +322,12 @@ func TestActualLibraryModuleAssemblyWhenAvailable(t *testing.T) {
 		if item.LibraryFile == "all_lb_sinopec.xml" && item.ID == "12772" {
 			ref, _ := repository.Resolve(item.Key)
 			request := moduleRequest(ref)
-			g := generator.Generator{Config: config.Default()}
+			g := fbd.Generator{Config: config.Default()}
 			plan, err := g.PrepareLibraryDO(ref, request)
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := g.GenerateLibraryDO(plan, generator.IDRange{T11Start: 100, CardStart: 1000, POUID: 2000})
+			result, err := g.GenerateLibraryDO(plan, xmlidentity.IDRange{T11Start: 100, CardStart: 1000, POUID: 2000})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -4,7 +4,7 @@ package moduleassignment
 import (
 	"errors"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/allocation"
 	"scheme-xml-generator/internal/httpapi/transport"
 )
 
@@ -24,7 +24,7 @@ func (s *Service) HandleModuleAssignmentGenerate(w http.ResponseWriter, r *http.
 	items, err := s.generateAssignments(plan)
 	if err != nil {
 		status := http.StatusBadRequest
-		var persistence *generator.AllocatorPersistenceError
+		var persistence *allocation.AllocatorPersistenceError
 		if errors.As(err, &persistence) {
 			status = http.StatusInternalServerError
 		}

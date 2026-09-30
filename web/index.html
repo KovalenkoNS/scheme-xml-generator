@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/shared/feedback.css">
   <link rel="stylesheet" href="/shell/workspace.css">
   <link rel="stylesheet" href="/sources/panel.css">
+  <link rel="stylesheet" href="/host/status.css">
   <link rel="stylesheet" href="/equipment/controllers.css">
   <link rel="stylesheet" href="/generation/settings.css">
   <link rel="stylesheet" href="/generation/modules.css">
@@ -30,8 +31,7 @@
   <main>
     <div class="page-heading"><div><p class="eyebrow" id="page-source">ДАННЫЕ HOST</p><h1>Генерация XML</h1></div><span class="source-badge" id="source-badge">Нет подключения</span></div>
     <section id="remote-source" class="source-panel" aria-label="Данные от Host">
-      <div class="connection"><span class="connection-dot" aria-hidden="true"></span><div><h2>Ожидает подключения к Host</h2><p>Выбор проекта и ПЛК появится после получения IO-данных. Сейчас доступна работа с локальными таблицами.</p></div></div>
-      <p class="route">PostgreSQL <span>→</span> Host-server <span>→</span> Host <span>→</span> XML Generator</p>
+      <div id="host-connection" class="connection" data-status="disconnected"><span class="connection-dot" aria-hidden="true"></span><div class="connection-content"><h2 id="host-title" role="status" aria-live="polite">Проверка соединения</h2><p id="host-address" hidden></p><p id="host-note">Локальная страница доступна без подключения к серверу.</p></div><button id="host-refresh" class="quiet" type="button" aria-label="Обновить соединение с Host">Обновить</button></div>
     </section>
     <section id="local-source" class="source-panel" aria-label="Локальные источники" hidden>
       <div class="source-top"><div><h2>Исходные данные</h2><p>IO-лист или подготовленные перекладки XLSX, карта AO в TXT.</p></div><label class="button" for="source-files">Добавить файлы<input id="source-files" type="file" accept=".xlsx,.txt,.tsv" multiple></label></div>

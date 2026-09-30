@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"strings"
 	"testing"
-
-	"scheme-xml-generator/internal/generator"
 )
 
 // assertRetiredSKZFBD checks the user-facing refusal and allocator/output invariants.
@@ -32,15 +32,15 @@ func TestSKZRetiredFBDCannotBeRestoredByCPUProfileOrWorkbook(t *testing.T) {
 	for _, scenario := range []struct {
 		name    string
 		data    []byte
-		request generator.ModuleMappingRequest
+		request stassignment.ModuleMappingRequest
 	}{
-		{"AI", skzAPIWorkbook(t), generator.ModuleMappingRequest{POUs: []generator.ModuleGroupRequest{{GroupKey: "PLC_ONE:AI:A1"}}}},
+		{"AI", skzAPIWorkbook(t), stassignment.ModuleMappingRequest{POUs: []stassignment.ModuleGroupRequest{{GroupKey: "PLC_ONE:AI:A1"}}}},
 		{"DI", raw, skzDIRequest(t, raw, "fbd", "")},
 		{"DO", raw, skzRawRequest(t, raw, "fbd", "DO", "")},
 		{"native DO", native, nativeRequest},
-		{"unparsed workbook", []byte("not a workbook"), generator.ModuleMappingRequest{}},
+		{"unparsed workbook", []byte("not a workbook"), stassignment.ModuleMappingRequest{}},
 	} {
-		for _, cpu := range []string{generator.ControllerCPU715, generator.ControllerCPU850} {
+		for _, cpu := range []string{cpuprofile.ControllerCPU715, cpuprofile.ControllerCPU850} {
 			for _, mode := range []string{"fbd", "fbd-native-do"} {
 				t.Run(scenario.name+"/"+cpu+"/"+mode, func(t *testing.T) {
 					request := scenario.request

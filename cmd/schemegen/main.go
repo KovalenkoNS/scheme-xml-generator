@@ -3,19 +3,17 @@ package main
 
 import (
 	"context"
-	"scheme-xml-generator/internal/appserver"
-	"scheme-xml-generator/internal/config"
-
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/library"
-
 	"os/signal"
+	"path/filepath"
+	"scheme-xml-generator/internal/appserver"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/allocation"
+	"scheme-xml-generator/internal/library"
 	webui "scheme-xml-generator/web"
 	"syscall"
 	"time"
@@ -61,11 +59,11 @@ func main() {
 		log.Fatal(err)
 	}
 	logger.Printf("loaded %d libraries, %d templates, %d errors", len(catalog.Libraries), len(catalog.Templates), len(catalog.Errors))
-	allocator, err := generator.NewAllocator(filepath.Join(root, "data", "state.json"), settings.IDs)
+	allocator, err := allocation.NewAllocator(filepath.Join(root, "data", "state.json"), settings.IDs)
 	if err != nil {
 		log.Fatal(err)
 	}
-	application := appserver.New(repository, generator.Generator{Config: settings}, allocator, filepath.Join(root, "output"), webui.Files(), logger)
+	application := appserver.New(repository, settings, allocator, filepath.Join(root, "output"), webui.Files(), logger)
 	address := fmt.Sprintf("%s:%d", settings.ListenAddress, settings.Port)
 	httpServer := &http.Server{
 		Addr:              address,

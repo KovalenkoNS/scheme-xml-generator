@@ -10,10 +10,12 @@ import (
 	aomap "scheme-xml-generator/internal/domain/analogoutput"
 	"scheme-xml-generator/internal/domain/hardware"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
 	"scheme-xml-generator/internal/generator/exportprofile"
 	"scheme-xml-generator/internal/generator/identifiers"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	moduleid "scheme-xml-generator/internal/generator/modules"
+	programcontext "scheme-xml-generator/internal/generator/program"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"sort"
@@ -114,15 +116,15 @@ func PrepareAOSTPlans(source *aomap.Plan, request AOSTRequest) ([]AOSTPlan, erro
 		sort.Slice(modules, func(i, j int) bool { return moduleIndices[modules[i].Name] < moduleIndices[modules[j].Name] })
 		for index := 0; index < selection.ModuleCount; index++ {
 			id := selection.ModuleIDs[index]
-			if id == nil || *id < 0 || *id > contracts.MaxTransportID {
-				return nil, fmt.Errorf("ST POU %s, модуль %d: ID должен быть целым числом 0..%d", group.Key, index+1, contracts.MaxTransportID)
+			if id == nil || *id < 0 || *id > xmlidentity.MaxTransportID {
+				return nil, fmt.Errorf("ST POU %s, модуль %d: ID должен быть целым числом 0..%d", group.Key, index+1, xmlidentity.MaxTransportID)
 			}
 			var module AOSTModule
 			if index < len(modules) {
 				module = AOSTModule{Name: modules[index].Name, ID: *id, Channels: append([]aomap.Channel(nil), modules[index].Channels...)}
 			} else {
 				moduleIndex := int64(maxIndex) + int64(index-len(modules)) + 1
-				if moduleIndex > contracts.MaxTransportID {
+				if moduleIndex > xmlidentity.MaxTransportID {
 					return nil, fmt.Errorf("ST POU %s: номер дополнительного модуля выходит за signed 32-bit", group.Key)
 				}
 				module = AOSTModule{Name: fmt.Sprintf("%s_%02d", group.Prefix, moduleIndex), ID: *id}
@@ -170,8 +172,8 @@ func validateAOSTPlan(plan *AOSTPlan) error {
 		names[strings.ToUpper(pou.Name)] = true
 		moduleNames := map[string]bool{}
 		for _, module := range pou.Modules {
-			if module.ID < 0 || module.ID > contracts.MaxTransportID {
-				return fmt.Errorf("ST POU %s, модуль %s: ID должен быть в диапазоне 0..%d", pou.Name, module.Name, contracts.MaxTransportID)
+			if module.ID < 0 || module.ID > xmlidentity.MaxTransportID {
+				return fmt.Errorf("ST POU %s, модуль %s: ID должен быть в диапазоне 0..%d", pou.Name, module.Name, xmlidentity.MaxTransportID)
 			}
 			if owner, exists := ids[module.ID]; exists {
 				return fmt.Errorf("ST FCS %s: ID физического модуля %d повторяется в %s и %s/%s", plan.ControllerName, module.ID, owner, pou.Name, module.Name)
@@ -214,40 +216,40 @@ func validateAOSTPlan(plan *AOSTPlan) error {
 
 // GenerateAOST emits the native ST-only XML profile. No object instances,
 // graphical blocks, or card IDs are created by these physical assignments.
-func (g Generator) GenerateAOST(plan AOSTPlan, ctx contracts.ProgramContext, ids contracts.IDRange) (contracts.Result, error) {
+func (g Generator) GenerateAOST(plan AOSTPlan, ctx programcontext.ProgramContext, ids xmlidentity.IDRange) (xmlartifact.Result, error) {
 	if err := validateAOSTPlan(&plan); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	ctx, err := addressing.NormalizeProgramContext(ctx, len(plan.POUs))
 	if err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	if err := exportprofile.ValidateAOPhysicalST(ctx.ControllerTypeName); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	if ctx.PhysicalProfile != "" && ctx.PhysicalProfile != addressing.PhysicalProfileLegacy {
-		return contracts.Result{}, fmt.Errorf("AO ST поддерживает только физический профиль %s", addressing.PhysicalProfileLegacy)
+		return xmlartifact.Result{}, fmt.Errorf("AO ST поддерживает только физический профиль %s", addressing.PhysicalProfileLegacy)
 	}
-	if ids.POUID < 1 || ids.POUID > contracts.MaxTransportID-int64(len(plan.POUs))+1 {
-		return contracts.Result{}, fmt.Errorf("диапазон ST POU ID выходит за signed 32-bit")
+	if ids.POUID < 1 || ids.POUID > xmlidentity.MaxTransportID-int64(len(plan.POUs))+1 {
+		return xmlartifact.Result{}, fmt.Errorf("диапазон ST POU ID выходит за signed 32-bit")
 	}
 	doc := xmlmodel.OutputSTDocument{Common: xmlmodel.OutputCommon{Version: ctx.Version, Project: ctx.Project, IsCut: "false", IsFFB: "false", ControllerType: ctx.ControllerTypeName, ControllerID: ctx.ControllerID, ResourceID: ctx.ResourceID}}
-	summary := contracts.Summary{POUCount: len(plan.POUs), IOModuleCount: plan.ModuleCount, SignalCount: plan.AssignmentCount,
-		POUID: ids.POUID, POUName: plan.POUs[0].Name, POUGroupID: ctx.GroupID, POUNumber: ctx.POUNumber, POUs: []contracts.POUSummary{}}
+	summary := xmlartifact.Summary{POUCount: len(plan.POUs), IOModuleCount: plan.ModuleCount, SignalCount: plan.AssignmentCount,
+		POUID: ids.POUID, POUName: plan.POUs[0].Name, POUGroupID: ctx.GroupID, POUNumber: ctx.POUNumber, POUs: []xmlartifact.POUSummary{}}
 	firstNumber, _ := strconv.ParseInt(ctx.POUNumber, 10, 32)
 	for index, pou := range plan.POUs {
 		id := ids.POUID + int64(index)
 		number := strconv.FormatInt(firstNumber+int64(index), 10)
 		var code strings.Builder
 		fmt.Fprintf(&code, "PROGRAM %s\n\n", pou.Name)
-		ps := contracts.POUSummary{POUID: id, POUName: pou.Name, POUGroupID: ctx.GroupID, POUNumber: number, Signals: []contracts.SignalSummary{}}
+		ps := xmlartifact.POUSummary{POUID: id, POUName: pou.Name, POUGroupID: ctx.GroupID, POUNumber: number, Signals: []xmlartifact.SignalSummary{}}
 		for _, module := range pou.Modules {
 			moduleID := module.ID
-			ps.IOModules = append(ps.IOModules, contracts.IOModuleSummary{Type: "AO", ID: module.ID, BindingPrefix: fmt.Sprintf("_IO_QU%d", module.ID), InstanceName: module.Name, Capacity: hardware.AOC4HChannels, SignalCount: hardware.AOC4HChannels})
+			ps.IOModules = append(ps.IOModules, xmlartifact.IOModuleSummary{Type: "AO", ID: module.ID, BindingPrefix: fmt.Sprintf("_IO_QU%d", module.ID), InstanceName: module.Name, Capacity: hardware.AOC4HChannels, SignalCount: hardware.AOC4HChannels})
 			for _, channel := range module.Channels {
 				fmt.Fprintf(&code, "_IO_QU%d_%d.ValueDINT := REAL_TO_DINT(%s.OUT, %s, %s);\n", module.ID, channel.Channel, channel.Tag, channel.Min, channel.Max)
 				channelNumber := channel.Channel
-				ps.Signals = append(ps.Signals, contracts.SignalSummary{TemplateKey: "temporary:AO_ST", BaseName: channel.Tag, IOType: "AO", ModuleID: &moduleID, Channel: &channelNumber})
+				ps.Signals = append(ps.Signals, xmlartifact.SignalSummary{TemplateKey: "temporary:AO_ST", BaseName: channel.Tag, IOType: "AO", ModuleID: &moduleID, Channel: &channelNumber})
 			}
 			code.WriteByte('\n')
 		}
@@ -257,13 +259,13 @@ func (g Generator) GenerateAOST(plan AOSTPlan, ctx contracts.ProgramContext, ids
 	}
 	data, err := xmlcodec.SerializeSCADAValue(doc)
 	if err != nil {
-		return contracts.Result{}, fmt.Errorf("создать ST XML: %w", err)
+		return xmlartifact.Result{}, fmt.Errorf("создать ST XML: %w", err)
 	}
 	if err := validateGeneratedAOST(data, doc, plan.AssignmentCount); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	warnings := []string{"ST XML содержит POU одного FCS; импортируйте его в соответствующий ПЛК. Повторные теги сохранены для всех физических выходов; экземпляры AN_v1 должны существовать в проекте."}
-	return contracts.Result{XML: data, BaseName: "AO_ST", Summary: summary, Warnings: warnings}, nil
+	return xmlartifact.Result{XML: data, BaseName: "AO_ST", Summary: summary, Warnings: warnings}, nil
 }
 
 // Native ST exports have only Common and POUS, and each OnePOU has only STCODE.

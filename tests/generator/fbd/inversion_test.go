@@ -14,14 +14,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/appserver"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/allocation"
+	"scheme-xml-generator/internal/generator/fbd"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
+	"scheme-xml-generator/internal/library"
 	"strings"
 	"testing"
 	"testing/fstest"
-
-	"scheme-xml-generator/internal/appserver"
-	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/library"
 )
 
 // Создаёт минимальный синтетический DIO-1 для внешних тестов генератора.
@@ -41,12 +43,12 @@ func dioTemplate() *library.TemplateRef {
 
 // Подготавливает публичные ResolvedPOU для комбинаций инверсии в тестах.
 // Каждый сигнал получает собственное имя; ссылка на исходный шаблон остаётся общей.
-func resolved(ref *library.TemplateRef, invert ...bool) []generator.ResolvedPOU {
-	signals := make([]generator.ResolvedSignal, len(invert))
+func resolved(ref *library.TemplateRef, invert ...bool) []fbdrequest.ResolvedPOU {
+	signals := make([]fbdrequest.ResolvedSignal, len(invert))
 	for i, value := range invert {
-		signals[i] = generator.ResolvedSignal{Ref: ref, Request: generator.SignalRequest{TemplateKey: ref.Key, ObjectName: fmt.Sprintf("_CPU_SIGNAL_%d", i), NameMode: "base", Invert: value}}
+		signals[i] = fbdrequest.ResolvedSignal{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: fmt.Sprintf("_CPU_SIGNAL_%d", i), NameMode: "base", Invert: value}}
 	}
-	return []generator.ResolvedPOU{{Request: generator.POURequest{Name: "DO_PROGRAM"}, Signals: signals}}
+	return []fbdrequest.ResolvedPOU{{Request: fbdrequest.POURequest{Name: "DO_PROGRAM"}, Signals: signals}}
 }
 
 type block struct {
@@ -110,14 +112,14 @@ func TestInversionUsesLibraryConnectionAndReservesExactIDs(t *testing.T) {
 	ref := dioTemplate()
 	input := resolved(ref, true, false)
 	before, _ := json.Marshal(input)
-	requirements, err := generator.RequirementsForDocument(input)
+	requirements, err := fbd.RequirementsForDocument(input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if requirements.T11Count != 8 || requirements.CardCount != 4 {
 		t.Fatalf("requirements=%+v", requirements)
 	}
-	result, err := (generator.Generator{Config: config.Default()}).GenerateDocument(generator.Request{}, input, generator.IDRange{T11Start: 100, CardStart: 200, POUID: 300})
+	result, err := (fbd.Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, input, xmlidentity.IDRange{T11Start: 100, CardStart: 200, POUID: 300})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +175,7 @@ func TestInversionLeavesDiagnosticConnectionUntouched(t *testing.T) {
 	quality.ID = "4"
 	quality.Params = library.ReplaceParam(quality.Params, "LP", "2|True|sts|0,0,0,0")
 	ref.Template.Contents.Primitives = append(ref.Template.Contents.Primitives, quality)
-	result, err := (generator.Generator{Config: config.Default()}).GenerateDocument(generator.Request{}, resolved(ref, true), generator.IDRange{T11Start: 100, CardStart: 200, POUID: 300})
+	result, err := (fbd.Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, resolved(ref, true), xmlidentity.IDRange{T11Start: 100, CardStart: 200, POUID: 300})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +232,7 @@ func TestUnsupportedInversionFailsBeforeReservation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ref := dioTemplate()
 			change(ref)
-			if _, err := generator.RequirementsForDocument(resolved(ref, true)); err == nil || !strings.Contains(err.Error(), "инверсия") {
+			if _, err := fbd.RequirementsForDocument(resolved(ref, true)); err == nil || !strings.Contains(err.Error(), "инверсия") {
 				t.Fatalf("unexpected result: %v", err)
 			}
 		})
@@ -265,12 +267,12 @@ func TestHTTPInversionFailureDoesNotWriteAllocatorOrOutput(t *testing.T) {
 		t.Fatalf("catalog=%+v err=%v", catalog, err)
 	}
 	statePath := filepath.Join(root, "state.json")
-	allocator, err := generator.NewAllocator(statePath, config.Default().IDs)
+	allocator, err := allocation.NewAllocator(statePath, config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := appserver.New(repository, generator.Generator{Config: config.Default()}, allocator, outputDir, fstest.MapFS{}, log.New(io.Discard, "", 0))
-	request := generator.Request{POUs: []generator.POURequest{{Name: "DO", Signals: []generator.SignalRequest{{TemplateKey: catalog.Templates[0].Key, ObjectName: "_DO", NameMode: "base", Invert: true}}}}}
+	app := appserver.New(repository, config.Default(), allocator, outputDir, fstest.MapFS{}, log.New(io.Discard, "", 0))
+	request := fbdrequest.Request{POUs: []fbdrequest.POURequest{{Name: "DO", Signals: []fbdrequest.SignalRequest{{TemplateKey: catalog.Templates[0].Key, ObjectName: "_DO", NameMode: "base", Invert: true}}}}}
 	data, _ = json.Marshal(request)
 	response := httptest.NewRecorder()
 	incoming := httptest.NewRequest(http.MethodPost, "http://localhost/api/generate", bytes.NewReader(data))
@@ -307,14 +309,14 @@ func TestActualLibraryDIO1InversionWhenAvailable(t *testing.T) {
 				t.Fatal("DIO-1 missing")
 			}
 			input := resolved(ref, true)
-			requirements, err := generator.RequirementsForDocument(input)
+			requirements, err := fbd.RequirementsForDocument(input)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if requirements.T11Count != 5 || requirements.CardCount != 2 {
 				t.Fatalf("requirements=%+v", requirements)
 			}
-			result, err := (generator.Generator{Config: config.Default()}).GenerateDocument(generator.Request{}, input, generator.IDRange{T11Start: 100, CardStart: 200, POUID: 300})
+			result, err := (fbd.Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, input, xmlidentity.IDRange{T11Start: 100, CardStart: 200, POUID: 300})
 			if err != nil {
 				t.Fatal(err)
 			}

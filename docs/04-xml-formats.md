@@ -90,7 +90,7 @@ flowchart TD
 
 Диапазон обычных транспортных ID — положительный signed 32-bit, до `2147483647`. Встроенные типы используют отрицательные ID; это другой класс идентификаторов. `cardId="0"` допустим для констант и объектов без карточки. Связь `Link` расходует позицию общего счётчика T11, хотя отдельный атрибут T11ID у неё в этом диалекте не сериализуется. Поэтому число видимых атрибутов `T11ID` не равно использованному диапазону.
 
-Источники: [allocator.go](../internal/generator/allocation/allocator.go), [types.go](../internal/generator/contracts/types.go), [document.go](../internal/generator/fbd/document.go), [appserver/skz.go](../internal/httpapi/st/moduleassignment/handler.go).
+Источники: [allocator.go](../internal/generator/allocation/allocator.go), [диапазоны ID](../internal/generator/identity/ranges.go), [document.go](../internal/generator/fbd/document.go), [ST-назначения](../internal/httpapi/st/moduleassignment/handler.go).
 
 ## 3. Дерево FBD XML
 
@@ -222,7 +222,7 @@ flowchart TD
 
 Единственная явно запрограммированная корректировка сигнатуры основного генератора относится к шаблону `19963`, типу `18513`, `AD3_HLB`: `CO` увеличивается до 17 по принятому эталону. Для других расхождений сигнатур сохраняются значения выбранного шаблона и выдаётся предупреждение. Это частный профиль, требующий версии и подтверждающего эталона при развитии библиотеки (`Q-XML-003`).
 
-Источники: [library/model.go](../internal/library/model.go), [generator.go](../internal/generator/facade.go), [document.go](../internal/generator/fbd/document.go), [ordering.go](../internal/generator/fbd/ordering.go).
+Источники: [library/model.go](../internal/library/model.go), [FBD-сервис](../internal/generator/fbd/service.go), [document.go](../internal/generator/fbd/document.go), [ordering.go](../internal/generator/fbd/ordering.go).
 
 ### 5.1. Опциональная физическая часть основного FBD
 

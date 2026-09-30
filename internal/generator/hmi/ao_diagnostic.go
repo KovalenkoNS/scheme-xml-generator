@@ -9,8 +9,9 @@ import (
 	aomap "scheme-xml-generator/internal/domain/analogoutput"
 	"scheme-xml-generator/internal/domain/hardware"
 	"scheme-xml-generator/internal/generator/allocation"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
 	"scheme-xml-generator/internal/generator/identifiers"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	moduleid "scheme-xml-generator/internal/generator/modules"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"sort"
@@ -223,13 +224,13 @@ func aoDiagnosticPrimitive(id int64, x, y, width, height int, objectMSID, cardID
 
 // GenerateAODiagnostic produces native panel pages, not BufScadaPOUS or POU
 // instances. The rows bind existing AN_v1 objects by controller/resource/tag.
-func (g Generator) GenerateAODiagnostic(plan AODiagnosticPlan, ctx HMIContext, ids contracts.DiagnosticIDRange) (contracts.Result, error) {
+func (g Generator) GenerateAODiagnostic(plan AODiagnosticPlan, ctx HMIContext, ids xmlidentity.DiagnosticIDRange) (xmlartifact.Result, error) {
 	if err := validateAODiagnosticPlan(&plan); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	ctx, err := normalizeHMIContext(ctx)
 	if err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	for _, item := range []struct {
 		start int64
@@ -237,15 +238,15 @@ func (g Generator) GenerateAODiagnostic(plan AODiagnosticPlan, ctx HMIContext, i
 		name  string
 	}{{ids.T11Start, plan.T11Count, "SourceT11ID"}, {ids.CardStart, plan.CardCount, "CardID"}, {ids.PageStart, plan.FrameCount, "PageID"}} {
 		if _, err := allocation.AddTransportCount(item.start, item.count, item.name); err != nil {
-			return contracts.Result{}, err
+			return xmlartifact.Result{}, err
 		}
 	}
 	doc := outputAODiagnosticDocument{XMLName: xml.Name{Local: "BufScada"}, Common: outputHMICommon{Version: ctx.Version, Project: ctx.Project},
 		ColorStyles: []outputHMIColor{{ID: "2", Name: "Фон мнемосхемы", Color: "14935011"}},
 		PageMS:      []outputHMIPageMS{{ID: "3679", Info: "2//(AN_v1)/(8x_Diag_МФК1500_HART_AO)"}, {ID: "3655", Info: "2//(AI_DIAG16_AD3v1_kvit)/(8x_AO_4_DIAG)"}}}
-	summary := contracts.Summary{Graphics: plan.T11Count, Cards: plan.CardCount, SignalCount: plan.SignalCount, IOModuleCount: plan.FrameCount, FrameCount: plan.FrameCount,
+	summary := xmlartifact.Summary{Graphics: plan.T11Count, Cards: plan.CardCount, SignalCount: plan.SignalCount, IOModuleCount: plan.FrameCount, FrameCount: plan.FrameCount,
 		T11First: ids.T11Start, T11Last: ids.T11Start + int64(plan.T11Count) - 1, CardFirst: ids.CardStart, CardLast: ids.CardStart + int64(plan.CardCount) - 1,
-		POUs: []contracts.POUSummary{}, Frames: []contracts.DiagnosticFrameSummary{}}
+		POUs: []xmlartifact.POUSummary{}, Frames: []xmlartifact.DiagnosticFrameSummary{}}
 	cards := map[string]string{}
 	nextT11 := ids.T11Start
 	for index, frame := range plan.Frames {
@@ -269,18 +270,18 @@ func (g Generator) GenerateAODiagnostic(plan AODiagnosticPlan, ctx HMIContext, i
 		}
 		page.PageLayers = []outputAODiagnosticLayer{layer}
 		doc.Pages = append(doc.Pages, page)
-		summary.Frames = append(summary.Frames, contracts.DiagnosticFrameSummary{ID: pageID, Name: frame.Name, Module: frame.Module})
+		summary.Frames = append(summary.Frames, xmlartifact.DiagnosticFrameSummary{ID: pageID, Name: frame.Name, Module: frame.Module})
 	}
 	data, err := xmlcodec.SerializeSCADAValue(doc)
 	if err != nil {
-		return contracts.Result{}, fmt.Errorf("создать XML диагностики: %w", err)
+		return xmlartifact.Result{}, fmt.Errorf("создать XML диагностики: %w", err)
 	}
 	if err := validateGeneratedAODiagnostic(data, doc); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	warnings := []string{"XML диагностики содержит все кадры выбранного ПЛК; импортируйте кадры в проект панели оператора, проверив ПЛК в привязках. Теги берутся из TXT, повторные каналы сохраняются.",
 		"Кадры ссылаются на существующие объекты AN_v1 и мнемосимволы 8x_Diag_МФК1500_HART_AO / 8x_AO_4_DIAG. Определения мнемосимволов и экземпляры объектов этим XML не создаются."}
-	return contracts.Result{XML: data, BaseName: "AO_DIAG", Summary: summary, Warnings: warnings}, nil
+	return xmlartifact.Result{XML: data, BaseName: "AO_DIAG", Summary: summary, Warnings: warnings}, nil
 }
 
 // validateGeneratedAODiagnostic Повторно разбирает сохранённую форму XML диагностики AO.

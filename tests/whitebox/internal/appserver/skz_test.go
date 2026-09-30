@@ -11,12 +11,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	"scheme-xml-generator/internal/generator/addressing"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
+	"scheme-xml-generator/internal/inputs/assignments"
 	"strings"
 	"testing"
-
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/inputs/assignments"
 )
 
 // skzAPIWorkbook builds a prepared assignment XLSX for two PLCs, with explicit source headers, to exercise the
@@ -77,10 +77,10 @@ func skzAPIConfig(t *testing.T, source []byte, kind string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := generator.ModuleMappingRequest{Kind: kind}
+	request := stassignment.ModuleMappingRequest{Kind: kind}
 	for _, group := range plan.Groups {
 		id := int64(24) // Same physical ID is allowed in different PLCs.
-		choice := generator.ModuleGroupRequest{GroupKey: group.Key}
+		choice := stassignment.ModuleGroupRequest{GroupKey: group.Key}
 		if kind == "st" {
 			choice.ModuleIDs = []*int64{&id}
 		}
@@ -172,7 +172,7 @@ func TestSKZAPIControllerTypesAndPhysicalProfiles(t *testing.T) {
 	if err := json.Unmarshal(profile.Body.Bytes(), &options); err != nil {
 		t.Fatal(err)
 	}
-	if profile.Code != http.StatusOK || strings.Join(options.ControllerTypes, ",") != "TENIX-CPU715,TENIX-CPU850" || strings.Join(options.PhysicalProfiles, ",") != "legacy-iu-qu,measurement-quality" || options.DefaultPhysicalProfiles[generator.ControllerCPU715] != generator.PhysicalProfileLegacy || options.DefaultPhysicalProfiles[generator.ControllerCPU850] != generator.PhysicalProfileMeasurement {
+	if profile.Code != http.StatusOK || strings.Join(options.ControllerTypes, ",") != "TENIX-CPU715,TENIX-CPU850" || strings.Join(options.PhysicalProfiles, ",") != "legacy-iu-qu,measurement-quality" || options.DefaultPhysicalProfiles[cpuprofile.ControllerCPU715] != addressing.PhysicalProfileLegacy || options.DefaultPhysicalProfiles[cpuprofile.ControllerCPU850] != addressing.PhysicalProfileMeasurement {
 		t.Fatal("incomplete controller/profile options", profile.Body.String())
 	}
 	workbook := skzAPIWorkbook(t)
@@ -180,11 +180,11 @@ func TestSKZAPIControllerTypesAndPhysicalProfiles(t *testing.T) {
 		name, cpu, physical string
 		measurement         bool
 	}{
-		{"715 default", generator.ControllerCPU715, "", false},
-		{"850 default", generator.ControllerCPU850, "", true},
-		{"715 legacy", generator.ControllerCPU715, generator.PhysicalProfileLegacy, false},
-		{"850 legacy", generator.ControllerCPU850, generator.PhysicalProfileLegacy, false},
-		{"850 measurement", generator.ControllerCPU850, generator.PhysicalProfileMeasurement, true},
+		{"715 default", cpuprofile.ControllerCPU715, "", false},
+		{"850 default", cpuprofile.ControllerCPU850, "", true},
+		{"715 legacy", cpuprofile.ControllerCPU715, addressing.PhysicalProfileLegacy, false},
+		{"850 legacy", cpuprofile.ControllerCPU850, addressing.PhysicalProfileLegacy, false},
+		{"850 measurement", cpuprofile.ControllerCPU850, addressing.PhysicalProfileMeasurement, true},
 	} {
 		for _, mode := range []string{"st"} {
 			t.Run(tc.name+"/"+mode, func(t *testing.T) {
@@ -351,7 +351,7 @@ func TestSKZAPIRejectsInvalidExpandedModulesWithoutSideEffects(t *testing.T) {
 			application, statePath, outputDir := aoTestApplication(t)
 			response := httptest.NewRecorder()
 			application.Handler().ServeHTTP(response, plcDiagnosticMultipart(t, "/api/skz/generate", "AI.xlsx", workbook, map[string]string{"config": config}))
-			var decoded generator.ModuleMappingRequest
+			var decoded stassignment.ModuleMappingRequest
 			wantStatus := http.StatusBadRequest
 			if json.Unmarshal([]byte(config), &decoded) == nil && decoded.Kind == "fbd" {
 				wantStatus = http.StatusGone

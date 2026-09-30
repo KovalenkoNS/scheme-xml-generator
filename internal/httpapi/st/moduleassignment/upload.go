@@ -4,14 +4,14 @@ package moduleassignment
 import (
 	"fmt"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
-	modulemapping "scheme-xml-generator/internal/httpapi/io/modulemapping"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
+	"scheme-xml-generator/internal/httpapi/io/modulemapping"
 )
 
 type assignmentInput struct {
 	Data                 []byte
 	FileName, RawContext string
-	Request              generator.ModuleMappingRequest
+	Request              stassignment.ModuleMappingRequest
 }
 
 // readAssignmentInput читает ограниченный XLSX multipart и настройки выбранных модулей.

@@ -3,7 +3,8 @@ package modulemapping
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/planning"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/inputs/assignments"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestSKZDOPhysicalChannelLimitInGeneratePreflight(t *testing.T) {
 		for _, mode := range []string{"st", "fbd"} {
 			t.Run(fmt.Sprintf("%s/%d", mode, moduleCount), func(t *testing.T) {
 				group := assignments.Group{Key: "PLC:DO:A1", ControllerName: "PLC", Kind: "DO", Prefix: "A1", POUName: "DO_A1"}
-				choice := generator.ModuleGroupRequest{GroupKey: group.Key}
+				choice := stassignment.ModuleGroupRequest{GroupKey: group.Key}
 				for index := 0; index < moduleCount; index++ {
 					group.Modules = append(group.Modules, assignments.Module{
 						Name: fmt.Sprintf("A1-%02d", index), Type: "DO32P", ObjectType: "D32V", Capacity: 32,
@@ -31,7 +32,7 @@ func TestSKZDOPhysicalChannelLimitInGeneratePreflight(t *testing.T) {
 				if err := CheckModuleMappingSize(source); err != nil {
 					t.Fatalf("sparse source should fit API source limits: %v", err)
 				}
-				plans, err := generator.PrepareModulePlans(source, generator.ModuleMappingRequest{Kind: mode, POUs: []generator.ModuleGroupRequest{choice}})
+				plans, err := planning.PrepareModulePlans(source, stassignment.ModuleMappingRequest{Kind: mode, POUs: []stassignment.ModuleGroupRequest{choice}})
 				if mode == "fbd" {
 					if err == nil || !strings.Contains(err.Error(), "библиотечный") {
 						t.Fatalf("fixed FBD plan was accepted: %v", err)

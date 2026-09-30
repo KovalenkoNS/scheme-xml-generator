@@ -8,11 +8,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	programcontext "scheme-xml-generator/internal/generator/program"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
+	"scheme-xml-generator/internal/inputs/assignments"
 	"strings"
 	"testing"
-
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/inputs/assignments"
 )
 
 // skzDIRawWorkbook reads the fixed raw DI/DO XLSX fixture used by compatibility-API tests; absence is an error.
@@ -27,20 +28,20 @@ func skzDIRawWorkbook(t *testing.T) []byte {
 
 // skzDIRequest selects DI groups from the parsed workbook and delegates construction of explicit per-controller
 // module IDs.
-func skzDIRequest(t *testing.T, workbook []byte, mode, only string) generator.ModuleMappingRequest {
+func skzDIRequest(t *testing.T, workbook []byte, mode, only string) stassignment.ModuleMappingRequest {
 	t.Helper()
 	return skzRawRequest(t, workbook, mode, "DI", only)
 }
 
 // skzRawRequest parses an assignment workbook and builds selected kind/POU choices, numbering ST module IDs
 // independently in each PLC.
-func skzRawRequest(t *testing.T, workbook []byte, mode, kind, only string) generator.ModuleMappingRequest {
+func skzRawRequest(t *testing.T, workbook []byte, mode, kind, only string) stassignment.ModuleMappingRequest {
 	t.Helper()
 	plan, err := assignments.Parse(workbook)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := generator.ModuleMappingRequest{Kind: mode}
+	request := stassignment.ModuleMappingRequest{Kind: mode}
 	nextID := map[string]int64{}
 	for _, group := range plan.Groups {
 		if kind != "" && group.Kind != kind {
@@ -49,7 +50,7 @@ func skzRawRequest(t *testing.T, workbook []byte, mode, kind, only string) gener
 		if only != "" && group.POUName != only {
 			continue
 		}
-		choice := generator.ModuleGroupRequest{GroupKey: group.Key}
+		choice := stassignment.ModuleGroupRequest{GroupKey: group.Key}
 		if mode == "st" {
 			for range group.Modules {
 				id := nextID[group.ControllerName]
@@ -64,7 +65,7 @@ func skzRawRequest(t *testing.T, workbook []byte, mode, kind, only string) gener
 
 // skzDIJSON serializes a module-mapping request for the multipart compatibility API and fails the test on encoding
 // errors.
-func skzDIJSON(t *testing.T, request generator.ModuleMappingRequest) string {
+func skzDIJSON(t *testing.T, request stassignment.ModuleMappingRequest) string {
 	t.Helper()
 	data, err := json.Marshal(request)
 	if err != nil {
@@ -171,15 +172,15 @@ func TestSKZDINativeProfileDefaults(t *testing.T) {
 	response := httptest.NewRecorder()
 	application.Handler().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/skz/profile", nil))
 	var profile struct {
-		ST  map[string]generator.ProgramContext `json:"contexts"`
-		FBD map[string]generator.ProgramContext `json:"fbdContexts"`
+		ST  map[string]programcontext.ProgramContext `json:"contexts"`
+		FBD map[string]programcontext.ProgramContext `json:"fbdContexts"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &profile); err != nil {
 		t.Fatal(err)
 	}
-	for _, contexts := range []map[string]generator.ProgramContext{profile.ST} {
+	for _, contexts := range []map[string]programcontext.ProgramContext{profile.ST} {
 		ctx := contexts["DI"]
-		if ctx.ControllerID != "189312" || ctx.ResourceID != "644" || ctx.GroupID != "19814" || ctx.ControllerTypeName != generator.ControllerCPU850 {
+		if ctx.ControllerID != "189312" || ctx.ResourceID != "644" || ctx.GroupID != "19814" || ctx.ControllerTypeName != cpuprofile.ControllerCPU850 {
 			t.Fatal("DI profile default missing", ctx)
 		}
 	}

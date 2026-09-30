@@ -2,11 +2,12 @@
 package generator_test
 
 import (
-	"scheme-xml-generator/internal/generator"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/planning"
+	stgen "scheme-xml-generator/internal/generator/st"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/inputs/assignments"
 	"strings"
 	"testing"
@@ -16,23 +17,23 @@ import (
 func TestModuleCountAndNewIDsGuards(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
-		change func(*contracts.ModuleMappingRequest)
+		change func(*stassignment.ModuleMappingRequest)
 	}{
-		{"zero", func(r *contracts.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(0) }},
-		{"negative", func(r *contracts.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(-1) }},
-		{"below source", func(r *contracts.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(1) }},
-		{"above cap", func(r *contracts.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(4097) }},
-		{"new ID absent", func(r *contracts.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(3) }},
-		{"new ID null", func(r *contracts.ModuleMappingRequest) {
+		{"zero", func(r *stassignment.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(0) }},
+		{"negative", func(r *stassignment.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(-1) }},
+		{"below source", func(r *stassignment.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(1) }},
+		{"above cap", func(r *stassignment.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(4097) }},
+		{"new ID absent", func(r *stassignment.ModuleMappingRequest) { r.POUs[0].ModuleCount = assignmentTestModuleCount(3) }},
+		{"new ID null", func(r *stassignment.ModuleMappingRequest) {
 			r.POUs[0].ModuleCount = assignmentTestModuleCount(3)
 			r.POUs[0].ModuleIDs = append(r.POUs[0].ModuleIDs, nil)
 		}},
-		{"new ID duplicate", func(r *contracts.ModuleMappingRequest) {
+		{"new ID duplicate", func(r *stassignment.ModuleMappingRequest) {
 			r.POUs[0].ModuleCount = assignmentTestModuleCount(3)
 			id := int64(2)
 			r.POUs[0].ModuleIDs = append(r.POUs[0].ModuleIDs, &id)
 		}},
-		{"extra ID", func(r *contracts.ModuleMappingRequest) {
+		{"extra ID", func(r *stassignment.ModuleMappingRequest) {
 			id := int64(100)
 			r.POUs[0].ModuleIDs = append(r.POUs[0].ModuleIDs, &id)
 		}},
@@ -58,7 +59,7 @@ func TestModuleRejectsUnknownCPUAndPhysicalProfile(t *testing.T) {
 			t.Run(mode+"/"+tc.cpu+"/"+tc.profile, func(t *testing.T) {
 				ctx := addressing.DefaultModuleContext()
 				ctx.ControllerTypeName, ctx.PhysicalProfile = tc.cpu, tc.profile
-				if _, err := (generator.Generator{}).GenerateModuleMapping(plan, ctx, contracts.IDRange{POUID: 1000, T11Start: 2000, CardStart: 3000}); err == nil {
+				if _, err := (stgen.Generator{}).GenerateModuleMapping(plan, ctx, xmlidentity.IDRange{POUID: 1000, T11Start: 2000, CardStart: 3000}); err == nil {
 					t.Fatal("accepted unsupported CPU/profile")
 				}
 			})
@@ -66,7 +67,7 @@ func TestModuleRejectsUnknownCPUAndPhysicalProfile(t *testing.T) {
 	}
 	ctx := addressing.DefaultModuleContext()
 	ctx.ControllerTypeName, ctx.PhysicalProfile = cpuprofile.ControllerCPU715, addressing.PhysicalProfileMeasurement
-	if _, err := (generator.Generator{}).GenerateModuleMapping(assignmentTestPlans(t, "st")[0], ctx, contracts.IDRange{POUID: 1000}); err == nil {
+	if _, err := (stgen.Generator{}).GenerateModuleMapping(assignmentTestPlans(t, "st")[0], ctx, xmlidentity.IDRange{POUID: 1000}); err == nil {
 		t.Fatal("accepted unverified CPU715 Measurement/Quality ST")
 	}
 }
@@ -78,7 +79,7 @@ func TestModuleDOFullPhysicalChannelLimitForPreparedAndDirectPlans(t *testing.T)
 	if err != nil || plans[0].AssignmentCount != 4096 || plans[0].SignalCount != 128 {
 		t.Fatalf("4096 physical channel boundary rejected: %+v, %v", plans, err)
 	}
-	if _, err := (generator.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100}); err != nil {
+	if _, err := (stgen.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 100}); err != nil {
 		t.Fatal("boundary generation", err)
 	}
 	source.Groups[0] = assignmentSparseDigitalGroup("PLC", "DO", "A33", 129)
@@ -95,7 +96,7 @@ func TestModuleDOFullPhysicalChannelLimitForPreparedAndDirectPlans(t *testing.T)
 	if _, err := planning.RequirementsForController(direct); err == nil {
 		t.Fatal("direct requirements bypassed physical channel limit")
 	}
-	if _, err := (generator.Generator{}).GenerateModuleMapping(direct, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100}); err == nil {
+	if _, err := (stgen.Generator{}).GenerateModuleMapping(direct, addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 100}); err == nil {
 		t.Fatal("direct generation bypassed physical channel limit")
 	}
 }
@@ -223,7 +224,7 @@ func TestModuleDIMixedPlanAndSeparatePLCNamespaces(t *testing.T) {
 			t.Fatalf("mixed assignment counts: %+v", plans)
 		}
 		for _, plan := range plans {
-			if _, err := (generator.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100, T11Start: 200, CardStart: 300}); err != nil {
+			if _, err := (stgen.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 100, T11Start: 200, CardStart: 300}); err != nil {
 				t.Fatal(err)
 			}
 		}

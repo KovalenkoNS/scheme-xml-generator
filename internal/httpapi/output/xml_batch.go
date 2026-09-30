@@ -5,14 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"path/filepath"
-	"scheme-xml-generator/internal/generator"
-
-	"os"
-
-	"scheme-xml-generator/internal/httpapi/transport"
-
 	"net/url"
+	"os"
+	"path/filepath"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	"scheme-xml-generator/internal/httpapi/transport"
 )
 
 type GeneratedControllerFile struct {
@@ -42,7 +39,7 @@ type BatchResponse struct {
 
 type ControllerResult struct {
 	ControllerName, FileName                                        string
-	Result                                                          generator.Result
+	Result                                                          xmlartifact.Result
 	SkippedDuplicateCount, AssignmentCount, RepeatedAssignmentCount int
 }
 

@@ -3,19 +3,18 @@ package planning
 
 import (
 	"fmt"
+	"scheme-xml-generator/internal/domain/assignments"
 	"scheme-xml-generator/internal/generator/identifiers"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/moduleprofile"
 	moduleid "scheme-xml-generator/internal/generator/modules"
-
-	"scheme-xml-generator/internal/domain/assignments"
-	"scheme-xml-generator/internal/generator/contracts"
-
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"strings"
 )
 
 // PrepareModulePlans Преобразует разобранный IO-лист и выбор пользователя в планы физических ST-назначений.
 // Проверяет группы, количество и явные ModuleID до передачи генераторам.
-func PrepareModulePlans(source *assignments.Plan, request contracts.ModuleMappingRequest) ([]contracts.ControllerPlan, error) {
+func PrepareModulePlans(source *assignments.Plan, request stassignment.ModuleMappingRequest) ([]stassignment.ControllerPlan, error) {
 	if source == nil || len(source.Groups) == 0 || len(source.Groups) > 128 || len(request.POUs) == 0 || len(request.POUs) > 128 || request.Kind != "st" {
 		return nil, fmt.Errorf("Модули: выберите ST и от 1 до 128 POU; FBD требует библиотечный план")
 	}
@@ -37,14 +36,14 @@ func PrepareModulePlans(source *assignments.Plan, request contracts.ModuleMappin
 			}
 		}
 	}
-	selected := map[string]contracts.ModuleGroupRequest{}
+	selected := map[string]stassignment.ModuleGroupRequest{}
 	for _, choice := range request.POUs {
 		if _, exists := selected[choice.GroupKey]; exists || !available[choice.GroupKey] {
 			return nil, fmt.Errorf("Модули: неизвестная или повторно выбранная POU %q", choice.GroupKey)
 		}
 		selected[choice.GroupKey] = choice
 	}
-	var plans []contracts.ControllerPlan
+	var plans []stassignment.ControllerPlan
 	controllers := map[string]int{}
 	totalModules, totalSignals, totalPOUs, mappedChannels := 0, 0, 0, 0
 	for _, group := range source.Groups {
@@ -95,9 +94,9 @@ func PrepareModulePlans(source *assignments.Plan, request contracts.ModuleMappin
 		if len(choice.ModuleIDs) != moduleCount {
 			return nil, fmt.Errorf("Модули %s: ST требует по одному ID на модуль", group.Key)
 		}
-		pou := contracts.ModuleGroup{GroupKey: group.Key, Name: group.POUName + "_channels", Kind: group.Kind, Prefix: group.Prefix}
+		pou := stassignment.ModuleGroup{GroupKey: group.Key, Name: group.POUName + "_channels", Kind: group.Kind, Prefix: group.Prefix}
 		for _, module := range group.Modules {
-			copyModule := contracts.PhysicalModule{Name: module.Name, Type: module.Type, ObjectType: module.ObjectType, Capacity: module.Capacity, Channels: append([]assignments.Channel(nil), module.Channels...)}
+			copyModule := stassignment.PhysicalModule{Name: module.Name, Type: module.Type, ObjectType: module.ObjectType, Capacity: module.Capacity, Channels: append([]assignments.Channel(nil), module.Channels...)}
 			pou.Modules = append(pou.Modules, copyModule)
 		}
 		for extra := 1; extra <= added; extra++ {
@@ -105,7 +104,7 @@ func PrepareModulePlans(source *assignments.Plan, request contracts.ModuleMappin
 			if sourceModules[strings.ToUpper(group.ControllerName)+"|"+name] {
 				return nil, fmt.Errorf("Модули %s: добавленный модуль %s уже существует в другой POU исходного файла", group.Key, name)
 			}
-			module := contracts.PhysicalModule{Name: name, Type: profile.HardwareType, ObjectType: profile.ObjectType, Capacity: capacity}
+			module := stassignment.PhysicalModule{Name: name, Type: profile.HardwareType, ObjectType: profile.ObjectType, Capacity: capacity}
 			for channel := 0; channel < capacity; channel++ {
 				tag := fmt.Sprintf("%s_%d", moduleid.ModuleInstanceTag(group.ControllerName, name), channel)
 				if group.Kind == "AI" && sourceTags[strings.ToUpper(group.ControllerName+"|"+tag)] {
@@ -127,7 +126,7 @@ func PrepareModulePlans(source *assignments.Plan, request contracts.ModuleMappin
 		if !exists {
 			index = len(plans)
 			controllers[key] = index
-			plans = append(plans, contracts.ControllerPlan{ControllerName: group.ControllerName, Kind: request.Kind, Warnings: append([]string(nil), source.Warnings...)})
+			plans = append(plans, stassignment.ControllerPlan{ControllerName: group.ControllerName, Kind: request.Kind, Warnings: append([]string(nil), source.Warnings...)})
 		} else if plans[index].ControllerName != group.ControllerName {
 			return nil, fmt.Errorf("Модули: неоднозначный регистр имени ПЛК %q", group.ControllerName)
 		}
@@ -149,8 +148,8 @@ func IsSyntheticReserve(channel assignments.Channel) bool {
 
 // ValidateControllerPlan Проверяет подготовленные модули, каналы и привязки перед ST-экспортом.
 // Возвращает потребность в ID; неверные планы не должны доходить до allocator.
-func ValidateControllerPlan(plan *contracts.ControllerPlan) (contracts.DocumentRequirements, error) {
-	var req contracts.DocumentRequirements
+func ValidateControllerPlan(plan *stassignment.ControllerPlan) (xmlidentity.DocumentRequirements, error) {
+	var req xmlidentity.DocumentRequirements
 	if !identifiers.ControllerNamePattern.MatchString(plan.ControllerName) || plan.Kind != "st" || len(plan.POUs) == 0 || len(plan.POUs) > 128 {
 		return req, fmt.Errorf("Модули: неверный ПЛК, режим или число POU")
 	}
@@ -187,8 +186,8 @@ func ValidateControllerPlan(plan *contracts.ControllerPlan) (contracts.DocumentR
 			if plan.ModuleCount > 4096 {
 				return req, fmt.Errorf("Модули: не более 4096 модулей")
 			}
-			if module.ID == nil || *module.ID < 0 || *module.ID > contracts.MaxTransportID || hardware[*module.ID] {
-				return req, fmt.Errorf("Модули %s/%s: ID должен быть указан, уникален в ПЛК и лежать в диапазоне 0..%d", pou.Name, module.Name, contracts.MaxTransportID)
+			if module.ID == nil || *module.ID < 0 || *module.ID > xmlidentity.MaxTransportID || hardware[*module.ID] {
+				return req, fmt.Errorf("Модули %s/%s: ID должен быть указан, уникален в ПЛК и лежать в диапазоне 0..%d", pou.Name, module.Name, xmlidentity.MaxTransportID)
 			}
 			hardware[*module.ID] = true
 			lastChannel := -1
@@ -236,6 +235,6 @@ func ValidateControllerPlan(plan *contracts.ControllerPlan) (contracts.DocumentR
 
 // RequirementsForController Считает ресурсы проверенного плана модулей для резервирования XML ID.
 // Не изменяет исходный план или постоянное состояние генератора.
-func RequirementsForController(plan contracts.ControllerPlan) (contracts.DocumentRequirements, error) {
+func RequirementsForController(plan stassignment.ControllerPlan) (xmlidentity.DocumentRequirements, error) {
 	return ValidateControllerPlan(&plan)
 }

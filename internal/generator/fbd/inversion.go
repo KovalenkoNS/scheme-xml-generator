@@ -3,7 +3,7 @@ package fbd
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/contracts"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
 	"scheme-xml-generator/internal/library"
 	"strconv"
 	"strings"
@@ -101,7 +101,7 @@ func invertD32Template(ref *library.TemplateRef) (*library.TemplateRef, error) {
 	for index, link := range connections {
 		primitive := primitives[link.index]
 		x, y := max(0, link.start.X), layout.MaxY+30+index*50
-		if x > contracts.MaxPageExtent-100 || y > contracts.MaxPageExtent-50 {
+		if x > fbdrequest.MaxPageExtent-100 || y > fbdrequest.MaxPageExtent-50 {
 			return nil, fmt.Errorf("инверсия: схема превышает допустимый размер страницы")
 		}
 		notID := newID("not", index)

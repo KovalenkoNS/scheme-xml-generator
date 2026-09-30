@@ -12,13 +12,14 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/allocation"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	"scheme-xml-generator/internal/library"
 	"strings"
 	"testing"
 	"testing/fstest"
-
-	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/library"
 )
 
 // TestAPIListsPreviewsGeneratesAndDownloads exercises the HTTP library catalog, signal preview, generated XML
@@ -30,12 +31,12 @@ func TestAPIListsPreviewsGeneratesAndDownloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	temp := isolatedHTTPTemp(t)
-	allocator, err := generator.NewAllocator(filepath.Join(temp, "data", "state.json"), config.Default().IDs)
+	allocator, err := allocation.NewAllocator(filepath.Join(temp, "data", "state.json"), config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var static fs.FS = fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}
-	application := New(repository, generator.Generator{Config: config.Default()}, allocator, filepath.Join(temp, "output"), static, log.New(io.Discard, "", 0))
+	application := New(repository, config.Default(), allocator, filepath.Join(temp, "output"), static, log.New(io.Discard, "", 0))
 	server := httptest.NewServer(application.Handler())
 	defer server.Close()
 
@@ -67,7 +68,7 @@ func TestAPIListsPreviewsGeneratesAndDownloads(t *testing.T) {
 	if previewResponse.StatusCode != http.StatusOK {
 		t.Fatalf("preview status=%d: %s", previewResponse.StatusCode, readBody(previewResponse.Body))
 	}
-	var preview generator.NamePreview
+	var preview fbdrequest.NamePreview
 	if err := json.NewDecoder(previewResponse.Body).Decode(&preview); err != nil {
 		t.Fatal(err)
 	}
@@ -82,9 +83,9 @@ func TestAPIListsPreviewsGeneratesAndDownloads(t *testing.T) {
 		t.Fatalf("generate status=%d: %s", generateResponse.StatusCode, readBody(generateResponse.Body))
 	}
 	var generated struct {
-		FileName string            `json:"fileName"`
-		URL      string            `json:"url"`
-		Summary  generator.Summary `json:"summary"`
+		FileName string              `json:"fileName"`
+		URL      string              `json:"url"`
+		Summary  xmlartifact.Summary `json:"summary"`
 	}
 	if err := json.NewDecoder(generateResponse.Body).Decode(&generated); err != nil {
 		t.Fatal(err)
@@ -127,12 +128,12 @@ func TestAPIGeneratesSeveralSignalsAndPOUsInOneFile(t *testing.T) {
 	}
 
 	temp := isolatedHTTPTemp(t)
-	allocator, err := generator.NewAllocator(filepath.Join(temp, "data", "state.json"), config.Default().IDs)
+	allocator, err := allocation.NewAllocator(filepath.Join(temp, "data", "state.json"), config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var static fs.FS = fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}
-	application := New(repository, generator.Generator{Config: config.Default()}, allocator, filepath.Join(temp, "output"), static, log.New(io.Discard, "", 0))
+	application := New(repository, config.Default(), allocator, filepath.Join(temp, "output"), static, log.New(io.Discard, "", 0))
 	server := httptest.NewServer(application.Handler())
 	defer server.Close()
 
@@ -331,11 +332,11 @@ func TestAPIDocumentRejectsLegacyFieldsAtDocumentLevel(t *testing.T) {
 	}
 	key := catalog.Templates[0].Key
 	temp := isolatedHTTPTemp(t)
-	allocator, err := generator.NewAllocator(filepath.Join(temp, "state.json"), config.Default().IDs)
+	allocator, err := allocation.NewAllocator(filepath.Join(temp, "state.json"), config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	application := New(repository, generator.Generator{Config: config.Default()}, allocator, filepath.Join(temp, "output"), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
+	application := New(repository, config.Default(), allocator, filepath.Join(temp, "output"), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
 	server := httptest.NewServer(application.Handler())
 	defer server.Close()
 	payload, _ := json.Marshal(map[string]any{
@@ -365,11 +366,11 @@ func TestAPIDocumentRejectsRequestLimitsBeforeGeneration(t *testing.T) {
 	}
 	key := catalog.Templates[0].Key
 	temp := isolatedHTTPTemp(t)
-	allocator, err := generator.NewAllocator(filepath.Join(temp, "state.json"), config.Default().IDs)
+	allocator, err := allocation.NewAllocator(filepath.Join(temp, "state.json"), config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	application := New(repository, generator.Generator{Config: config.Default()}, allocator, filepath.Join(temp, "output"), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
+	application := New(repository, config.Default(), allocator, filepath.Join(temp, "output"), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
 	server := httptest.NewServer(application.Handler())
 	defer server.Close()
 
@@ -444,14 +445,14 @@ func TestAPIPersistenceFailureRemainsServerErrorWithManualIDs(t *testing.T) {
 	}
 	temp := isolatedHTTPTemp(t)
 	statePath := filepath.Join(temp, "state.json")
-	allocator, err := generator.NewAllocator(statePath, config.Default().IDs)
+	allocator, err := allocation.NewAllocator(statePath, config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(statePath+".tmp", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	application := New(repository, generator.Generator{Config: config.Default()}, allocator, filepath.Join(temp, "output"), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
+	application := New(repository, config.Default(), allocator, filepath.Join(temp, "output"), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
 	server := httptest.NewServer(application.Handler())
 	defer server.Close()
 	pouID := int64(123456)
@@ -472,7 +473,7 @@ func TestAPIPersistenceFailureRemainsServerErrorWithManualIDs(t *testing.T) {
 // TestMalformedOriginIsRejectedWithoutPanic sends an invalid Origin header to library refresh and requires a safe
 // HTTP 403 response.
 func TestMalformedOriginIsRejectedWithoutPanic(t *testing.T) {
-	application := New(nil, generator.Generator{}, nil, isolatedHTTPTemp(t), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
+	application := New(nil, config.Config{}, nil, isolatedHTTPTemp(t), fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
 	request := httptest.NewRequest(http.MethodPost, "/api/refresh", bytes.NewReader([]byte(`{}`)))
 	request.Header.Set("Origin", "%")
 	response := httptest.NewRecorder()
@@ -531,13 +532,13 @@ func templateKeyByID(t *testing.T, catalog library.Catalog, id string) string {
 func newDocumentTestServer(t *testing.T, repository *library.Repository) *httptest.Server {
 	t.Helper()
 	temp := isolatedHTTPTemp(t)
-	allocator, err := generator.NewAllocator(filepath.Join(temp, "data", "state.json"), config.Default().IDs)
+	allocator, err := allocation.NewAllocator(filepath.Join(temp, "data", "state.json"), config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	application := New(
 		repository,
-		generator.Generator{Config: config.Default()},
+		config.Default(),
 		allocator,
 		filepath.Join(temp, "output"),
 		fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}},

@@ -3,7 +3,8 @@ package fbd
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/fbd"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
 	"scheme-xml-generator/internal/httpapi/limits"
 	"scheme-xml-generator/internal/library"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 // collectTemplateKeys проверяет пределы документа и находит templateKey всех сигналов.
 // Получает нормализованный Request, возвращает ключи для одного Repository.ResolveMany без побочных эффектов.
-func collectTemplateKeys(request generator.Request) ([]string, error) {
+func collectTemplateKeys(request fbdrequest.Request) ([]string, error) {
 	keys := make([]string, 0)
 	signalCount := 0
 	moduleCount := 0
@@ -22,7 +23,7 @@ func collectTemplateKeys(request generator.Request) ([]string, error) {
 				return nil, fmt.Errorf("один файл может содержать не более %d физических модулей", limits.MaxDocumentModules)
 			}
 		}
-		signals := generator.POUSignals(pou)
+		signals := fbd.POUSignals(pou)
 		if len(signals) == 0 {
 			return nil, fmt.Errorf("POU %d не содержит сигналов", pouIndex+1)
 		}
@@ -47,12 +48,12 @@ func collectTemplateKeys(request generator.Request) ([]string, error) {
 
 // resolvePOUSignals связывает сигналы POU с разрешёнными библиотечными шаблонами.
 // Проверяет совместимость каждого уникального шаблона и возвращает входы предметного генератора FBD.
-func resolvePOUSignals(request generator.Request, references map[string]*library.TemplateRef) ([]generator.ResolvedPOU, error) {
+func resolvePOUSignals(request fbdrequest.Request, references map[string]*library.TemplateRef) ([]fbdrequest.ResolvedPOU, error) {
 	checked := make(map[string]struct{}, len(references))
-	resolved := make([]generator.ResolvedPOU, 0, len(request.POUs))
+	resolved := make([]fbdrequest.ResolvedPOU, 0, len(request.POUs))
 	for pouIndex, pou := range request.POUs {
-		signals := generator.POUSignals(pou)
-		resolvedPOU := generator.ResolvedPOU{Request: pou, Signals: make([]generator.ResolvedSignal, 0, len(signals))}
+		signals := fbd.POUSignals(pou)
+		resolvedPOU := fbdrequest.ResolvedPOU{Request: pou, Signals: make([]fbdrequest.ResolvedSignal, 0, len(signals))}
 		for signalIndex, signal := range signals {
 			key := strings.TrimSpace(signal.TemplateKey)
 			if key == "" {
@@ -68,7 +69,7 @@ func resolvePOUSignals(request generator.Request, references map[string]*library
 			}
 			effectiveSignal := signal
 			effectiveSignal.TemplateKey = key
-			resolvedPOU.Signals = append(resolvedPOU.Signals, generator.ResolvedSignal{Request: effectiveSignal, Ref: ref})
+			resolvedPOU.Signals = append(resolvedPOU.Signals, fbdrequest.ResolvedSignal{Request: effectiveSignal, Ref: ref})
 		}
 		resolved = append(resolved, resolvedPOU)
 	}

@@ -3,14 +3,14 @@ package fbd
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/contracts"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
 	"strings"
 )
 
 // NormalizePOURequests проверяет выбранные библиотечные экземпляры до поиска шаблонов и выделения ID.
 // Старый io.modules отклоняется и при прямом вызове ядра; физический DO имеет отдельный библиотечный запрос.
-func NormalizePOURequests(requests []contracts.POURequest) ([]contracts.POURequest, error) {
-	result := make([]contracts.POURequest, len(requests))
+func NormalizePOURequests(requests []fbdrequest.POURequest) ([]fbdrequest.POURequest, error) {
+	result := make([]fbdrequest.POURequest, len(requests))
 	for index, original := range requests {
 		if original.IO != nil {
 			return nil, fmt.Errorf("POU %d: io.modules отключён; требуется библиотечный план", index+1)
@@ -33,8 +33,8 @@ func NormalizePOURequests(requests []contracts.POURequest) ([]contracts.POUReque
 
 // POUSignals возвращает независимый список экземпляров POU с выбранным шаблоном по умолчанию.
 // Встроенная аппаратная схема из io.modules здесь не создаётся.
-func POUSignals(pou contracts.POURequest) []contracts.SignalRequest {
-	result := append([]contracts.SignalRequest(nil), pou.Signals...)
+func POUSignals(pou fbdrequest.POURequest) []fbdrequest.SignalRequest {
+	result := append([]fbdrequest.SignalRequest(nil), pou.Signals...)
 	for index := range result {
 		result[index] = normalizeSignalRequest(result[index])
 		if result[index].TemplateKey == "" {
@@ -46,12 +46,12 @@ func POUSignals(pou contracts.POURequest) []contracts.SignalRequest {
 
 // normalizeResolvedPOUs закрепляет каждый экземпляр за точным снимком подключённой библиотеки.
 // Инверсия изменяет независимую копию разрешённого графа; исходная библиотека не меняется.
-func normalizeResolvedPOUs(pous []contracts.ResolvedPOU) ([]contracts.ResolvedPOU, error) {
-	requests := make([]contracts.POURequest, len(pous))
+func normalizeResolvedPOUs(pous []fbdrequest.ResolvedPOU) ([]fbdrequest.ResolvedPOU, error) {
+	requests := make([]fbdrequest.POURequest, len(pous))
 	for index, pou := range pous {
 		request := clonePOURequest(pou.Request)
 		if len(request.Signals) == 0 && len(pou.Signals) != 0 {
-			request.Signals = make([]contracts.SignalRequest, len(pou.Signals))
+			request.Signals = make([]fbdrequest.SignalRequest, len(pou.Signals))
 			for signalIndex, signal := range pou.Signals {
 				request.Signals[signalIndex] = signal.Request
 				if request.Signals[signalIndex].TemplateKey == "" && signal.Ref != nil {
@@ -65,7 +65,7 @@ func normalizeResolvedPOUs(pous []contracts.ResolvedPOU) ([]contracts.ResolvedPO
 	if err != nil {
 		return nil, err
 	}
-	result := make([]contracts.ResolvedPOU, len(pous))
+	result := make([]fbdrequest.ResolvedPOU, len(pous))
 	for index, pou := range pous {
 		result[index] = pou
 		result[index].Request = normalized[index]
@@ -73,7 +73,7 @@ func normalizeResolvedPOUs(pous []contracts.ResolvedPOU) ([]contracts.ResolvedPO
 		if len(effective) != len(pou.Signals) {
 			return nil, fmt.Errorf("POU %d: разрешено %d шаблонов для %d сигналов", index+1, len(pou.Signals), len(effective))
 		}
-		result[index].Signals = make([]contracts.ResolvedSignal, len(pou.Signals))
+		result[index].Signals = make([]fbdrequest.ResolvedSignal, len(pou.Signals))
 		for signalIndex, signal := range pou.Signals {
 			if signal.Ref == nil || signal.Ref.Template == nil || signal.Ref.Library == nil {
 				return nil, fmt.Errorf("POU %d, сигнал %d: шаблон не разрешён", index+1, signalIndex+1)
@@ -88,7 +88,7 @@ func normalizeResolvedPOUs(pous []contracts.ResolvedPOU) ([]contracts.ResolvedPO
 					return nil, fmt.Errorf("POU %d, сигнал %d: %w", index+1, signalIndex+1, err)
 				}
 			}
-			result[index].Signals[signalIndex] = contracts.ResolvedSignal{Request: effective[signalIndex], Ref: ref}
+			result[index].Signals[signalIndex] = fbdrequest.ResolvedSignal{Request: effective[signalIndex], Ref: ref}
 		}
 	}
 	return result, nil
@@ -96,15 +96,15 @@ func normalizeResolvedPOUs(pous []contracts.ResolvedPOU) ([]contracts.ResolvedPO
 
 // clonePOURequest копирует изменяемые списки экземпляров перед нормализацией FBD.
 // Не поддерживаемый IO сохраняется только для явного отказа, без копирования его реализации.
-func clonePOURequest(request contracts.POURequest) contracts.POURequest {
+func clonePOURequest(request fbdrequest.POURequest) fbdrequest.POURequest {
 	result := request
-	result.Signals = append([]contracts.SignalRequest(nil), request.Signals...)
+	result.Signals = append([]fbdrequest.SignalRequest(nil), request.Signals...)
 	return result
 }
 
 // normalizeSignalRequest удаляет незначащие пробелы из параметров библиотечного экземпляра.
 // Возвращает копию полей запроса без изменения выбранного шаблона.
-func normalizeSignalRequest(signal contracts.SignalRequest) contracts.SignalRequest {
+func normalizeSignalRequest(signal fbdrequest.SignalRequest) fbdrequest.SignalRequest {
 	signal.TemplateKey = strings.TrimSpace(signal.TemplateKey)
 	signal.ObjectName = strings.TrimSpace(signal.ObjectName)
 	signal.NameMode = strings.TrimSpace(signal.NameMode)

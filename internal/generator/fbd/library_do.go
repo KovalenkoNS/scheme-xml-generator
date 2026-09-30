@@ -4,15 +4,18 @@ package fbd
 import (
 	"fmt"
 	"reflect"
+	"scheme-xml-generator/internal/domain/assignments"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/domain/hardware"
 	"scheme-xml-generator/internal/generator/addressing"
 	"scheme-xml-generator/internal/generator/allocation"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
 	"scheme-xml-generator/internal/generator/identifiers"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	moduleid "scheme-xml-generator/internal/generator/modules"
-
-	"scheme-xml-generator/internal/domain/assignments"
+	programcontext "scheme-xml-generator/internal/generator/program"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"scheme-xml-generator/internal/library"
 	"sort"
@@ -23,12 +26,12 @@ import (
 // LibraryDORequest assembles each physical DO module once. Library templates
 // supply logical types; the evidenced CPU850 driver supplies Quality metadata.
 type LibraryDORequest struct {
-	TemplateKey     string                       `json:"templateKey"`
-	PLCName         string                       `json:"plcName"`
-	Context         *contracts.GenerationContext `json:"context,omitempty"`
-	PhysicalProfile string                       `json:"physicalProfile,omitempty"`
-	FileName        string                       `json:"fileName,omitempty"`
-	POUs            []LibraryDOPOURequest        `json:"pous"`
+	TemplateKey     string                        `json:"templateKey"`
+	PLCName         string                        `json:"plcName"`
+	Context         *fbdrequest.GenerationContext `json:"context,omitempty"`
+	PhysicalProfile string                        `json:"physicalProfile,omitempty"`
+	FileName        string                        `json:"fileName,omitempty"`
+	POUs            []LibraryDOPOURequest         `json:"pous"`
 }
 
 type LibraryDOPOURequest struct {
@@ -53,15 +56,15 @@ type LibraryDOChannelRequest struct {
 // LibraryDOPlan is an immutable validated snapshot; callers can inspect counts
 // without exposing mutable library pointers or a partially prepared graph.
 type LibraryDOPlan struct {
-	plan         contracts.ControllerPlan
-	context      contracts.ProgramContext
+	plan         stassignment.ControllerPlan
+	context      programcontext.ProgramContext
 	profile      *d32LibraryProfile
-	requirements contracts.DocumentRequirements
+	requirements xmlidentity.DocumentRequirements
 }
 
 // Requirements вызывается HTTP-слоем перед резервированием диапазона allocator.
 // Возвращает копию рассчитанных количеств объектов, карточек и POU без записи состояния.
-func (p *LibraryDOPlan) Requirements() contracts.DocumentRequirements { return p.requirements }
+func (p *LibraryDOPlan) Requirements() xmlidentity.DocumentRequirements { return p.requirements }
 
 type d32LibraryProfile struct {
 	templateKey                   string
@@ -198,13 +201,13 @@ func (g Generator) PrepareLibraryDO(ref *library.TemplateRef, request LibraryDOR
 	if !identifiers.ControllerNamePattern.MatchString(request.PLCName) || len(request.POUs) == 0 || len(request.POUs) > 128 {
 		return nil, fmt.Errorf("DO: укажите имя ПЛК и от 1 до 128 POU")
 	}
-	ctx := contracts.ProgramContext{Version: g.Config.Common.Version, Project: g.Config.Common.Project, ControllerTypeName: g.Config.Common.ControllerType, ControllerID: g.Config.Common.ControllerID, ResourceID: g.Config.Common.ResourceID, GroupID: g.Config.Page.GroupID, POUNumber: g.Config.Page.POUNumber, PhysicalProfile: physical}
+	ctx := programcontext.ProgramContext{Version: g.Config.Common.Version, Project: g.Config.Common.Project, ControllerTypeName: g.Config.Common.ControllerType, ControllerID: g.Config.Common.ControllerID, ResourceID: g.Config.Common.ResourceID, GroupID: g.Config.Page.GroupID, POUNumber: g.Config.Page.POUNumber, PhysicalProfile: physical}
 	ctx, err = addressing.NormalizeProgramContext(ctx, len(request.POUs))
 	if err != nil {
 		return nil, err
 	}
-	plan := contracts.ControllerPlan{ControllerName: request.PLCName, Kind: "fbd", POUs: make([]contracts.ModuleGroup, 0, len(request.POUs))}
-	req := contracts.DocumentRequirements{POUCount: len(request.POUs)}
+	plan := stassignment.ControllerPlan{ControllerName: request.PLCName, Kind: "fbd", POUs: make([]stassignment.ModuleGroup, 0, len(request.POUs))}
+	req := xmlidentity.DocumentRequirements{POUCount: len(request.POUs)}
 	cards, cardRoles := map[string]bool{}, map[string]string{}
 	reserveCard := func(tag, role string) error {
 		key := strings.ToUpper(tag)
@@ -246,10 +249,10 @@ func (g Generator) PrepareLibraryDO(ref *library.TemplateRef, request LibraryDOR
 		if len(source.Modules) == 0 || len(source.Modules) > 128 {
 			return nil, fmt.Errorf("DO: POU %s должна содержать от 1 до 128 модулей", source.Name)
 		}
-		pou := contracts.ModuleGroup{Name: source.Name, Kind: "DO", Modules: make([]contracts.PhysicalModule, 0, len(source.Modules))}
+		pou := stassignment.ModuleGroup{Name: source.Name, Kind: "DO", Modules: make([]stassignment.PhysicalModule, 0, len(source.Modules))}
 		for _, sourceModule := range source.Modules {
-			if sourceModule.ID == nil || *sourceModule.ID < 0 || *sourceModule.ID > contracts.MaxTransportID {
-				return nil, fmt.Errorf("DO: укажите физический ModuleID 0…%d для %s", contracts.MaxTransportID, sourceModule.Name)
+			if sourceModule.ID == nil || *sourceModule.ID < 0 || *sourceModule.ID > xmlidentity.MaxTransportID {
+				return nil, fmt.Errorf("DO: укажите физический ModuleID 0…%d для %s", xmlidentity.MaxTransportID, sourceModule.Name)
 			}
 			moduleID := *sourceModule.ID
 			moduleTag := moduleid.ModuleInstanceTag(request.PLCName, sourceModule.Name)
@@ -264,7 +267,7 @@ func (g Generator) PrepareLibraryDO(ref *library.TemplateRef, request LibraryDOR
 			if err := reserveCard(addressing.DODiagnosticTag(moduleID), "physical"); err != nil {
 				return nil, err
 			}
-			module := contracts.PhysicalModule{Name: sourceModule.Name, Type: "DO32P", ObjectType: "D32V", Capacity: hardware.ChannelCount("DO32P"), ID: &moduleID, Channels: make([]assignments.Channel, 0, len(sourceModule.Channels))}
+			module := stassignment.PhysicalModule{Name: sourceModule.Name, Type: "DO32P", ObjectType: "D32V", Capacity: hardware.ChannelCount("DO32P"), ID: &moduleID, Channels: make([]assignments.Channel, 0, len(sourceModule.Channels))}
 			if len(sourceModule.Channels) > 32 {
 				return nil, fmt.Errorf("DO: у модуля %s более 32 каналов", sourceModule.Name)
 			}
@@ -304,12 +307,12 @@ func (g Generator) PrepareLibraryDO(ref *library.TemplateRef, request LibraryDOR
 // GenerateLibraryDO выполняет уже проверенный план внутри транзакции резервирования ID.
 // Передаёт библиотечные метаданные общему модульному renderer и возвращает XML/сводку;
 // сохранение файлов и продвижение allocator остаются у вызывающего HTTP-слоя.
-func (g Generator) GenerateLibraryDO(plan *LibraryDOPlan, ids contracts.IDRange) (contracts.Result, error) {
+func (g Generator) GenerateLibraryDO(plan *LibraryDOPlan, ids xmlidentity.IDRange) (xmlartifact.Result, error) {
 	if plan == nil || plan.profile == nil {
-		return contracts.Result{}, fmt.Errorf("DO: план не подготовлен")
+		return xmlartifact.Result{}, fmt.Errorf("DO: план не подготовлен")
 	}
 	if err := allocation.ValidateDocumentRanges(ids, plan.requirements); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	return generateD32ModuleFBD(plan.plan, plan.context, ids, plan.requirements, plan.profile)
 }

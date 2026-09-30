@@ -2,13 +2,13 @@
 package hmi
 
 import (
-	"scheme-xml-generator/internal/generator"
-
+	"scheme-xml-generator/internal/generator/allocation"
+	hmigen "scheme-xml-generator/internal/generator/hmi"
 	"scheme-xml-generator/internal/httpapi/output"
 )
 
 type Service struct {
-	Generator *generator.Generator
-	Allocator *generator.Allocator
+	Generator *hmigen.Generator
+	Allocator *allocation.Allocator
 	Output    *output.Store
 }

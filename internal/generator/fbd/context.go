@@ -3,16 +3,16 @@ package fbd
 
 import (
 	"fmt"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
 	"strings"
 	"unicode/utf8"
 )
 
 // withGenerationContext Создаёт копию FBD-генератора с константами текущего HTTP-запроса.
 // Проверяет CPU и поля Common; конфигурационный файл пользователя не меняет.
-func (g Generator) withGenerationContext(ctx *contracts.GenerationContext) (Generator, error) {
+func (g Generator) withGenerationContext(ctx *fbdrequest.GenerationContext) (Generator, error) {
 	if ctx == nil {
 		return g, nil
 	}

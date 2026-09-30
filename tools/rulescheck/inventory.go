@@ -17,8 +17,9 @@ func audit(root string) ([]string, int) {
 	count := 0
 	for _, relative := range []string{
 		"docs/SOURCE_LAYOUT.md", ".specify/memory/rules.md", "tests/whitebox_test.go", "tests/whitebox/go.mod",
-		"internal/generator/fbd", "internal/generator/st", "internal/generator/hmi", "internal/generator/contracts",
-		"internal/generator/xmlmodel", "internal/generator/xmlcodec", "internal/generator/allocation", "internal/generator/controller", "internal/generator/planning",
+		"internal/generator/fbd", "internal/generator/st", "internal/generator/hmi", "internal/generator/fbd/request",
+		"internal/generator/identity", "internal/generator/artifact", "internal/generator/program", "internal/generator/st/assignment",
+		"internal/generator/xmlmodel", "internal/generator/xmlcodec", "internal/generator/allocation", "internal/domain/controller", "internal/generator/planning",
 		"internal/generator/addressing", "internal/generator/identifiers", "internal/generator/modules", "internal/generator/moduleprofile", "internal/generator/exportprofile",
 		"internal/domain/assignments", "internal/domain/analogoutput", "internal/domain/inventory", "internal/domain/hardware",
 		"internal/inputs/assignments/raw", "internal/inputs/assignments/prepared", "internal/inputs/xlsx",
@@ -71,8 +72,8 @@ func audit(root string) ([]string, int) {
 			return nil
 		}
 		count++
-		if filepath.ToSlash(filepath.Dir(relative)) == "internal/generator" && entry.Name() != "facade.go" {
-			failures = append(failures, "CODE-001: generator root must contain only its compatibility facade: "+relative)
+		if filepath.ToSlash(filepath.Dir(relative)) == "internal/generator" || strings.HasPrefix(relative, "internal/generator/contracts/") {
+			failures = append(failures, "CODE-001: aggregate generator API or mixed contracts returned: "+relative)
 		}
 		file, comments := inspectGoComments(path, relative)
 		failures = append(failures, comments...)

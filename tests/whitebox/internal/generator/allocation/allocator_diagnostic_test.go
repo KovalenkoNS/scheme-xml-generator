@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"testing"
 )
 
@@ -23,9 +23,9 @@ func TestDiagnosticAllocatorMigratesLegacyStateAndKeepsPOUCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wanted := contracts.DiagnosticIDRange{T11Start: 1234, CardStart: 2345, PageStart: 1000000}
+	wanted := xmlidentity.DiagnosticIDRange{T11Start: 1234, CardStart: 2345, PageStart: 1000000}
 	failed := errors.New("invalid diagnostic document")
-	if _, err := allocator.WithDiagnosticReservation(10, 6, 2, func(ids contracts.DiagnosticIDRange) error {
+	if _, err := allocator.WithDiagnosticReservation(10, 6, 2, func(ids xmlidentity.DiagnosticIDRange) error {
 		if ids != wanted {
 			t.Fatalf("legacy cursor lost: %+v", ids)
 		}
@@ -55,11 +55,11 @@ func TestDiagnosticAllocatorMigratesLegacyStateAndKeepsPOUCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	ids, err := reloaded.ReserveMany(1, 1, 1)
-	if err != nil || ids != (contracts.IDRange{T11Start: 1244, CardStart: 2351, POUID: 3456}) {
+	if err != nil || ids != (xmlidentity.IDRange{T11Start: 1244, CardStart: 2351, POUID: 3456}) {
 		t.Fatalf("diagnostics consumed POU IDs: %+v %v", ids, err)
 	}
 	diagnostic, err := reloaded.WithDiagnosticReservation(5, 4, 1, nil)
-	if err != nil || diagnostic != (contracts.DiagnosticIDRange{T11Start: 1245, CardStart: 2352, PageStart: 1000002}) {
+	if err != nil || diagnostic != (xmlidentity.DiagnosticIDRange{T11Start: 1245, CardStart: 2352, PageStart: 1000002}) {
 		t.Fatalf("FBD consumed page IDs: %+v %v", diagnostic, err)
 	}
 }
@@ -68,7 +68,7 @@ func TestDiagnosticAllocatorMigratesLegacyStateAndKeepsPOUCursor(t *testing.T) {
 // storage failure cannot commit page or primitive cursors.
 func TestDiagnosticAllocatorRejectsInvalidRangesAndPersistsAtomically(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	defaults := config.IDDefaults{NextT11: contracts.MaxTransportID, NextCard: contracts.MaxTransportID, NextPOU: contracts.MaxTransportID + 1, NextPage: contracts.MaxTransportID}
+	defaults := config.IDDefaults{NextT11: xmlidentity.MaxTransportID, NextCard: xmlidentity.MaxTransportID, NextPOU: xmlidentity.MaxTransportID + 1, NextPage: xmlidentity.MaxTransportID}
 	allocator, err := NewAllocator(path, defaults)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestDiagnosticAllocatorRejectsInvalidRangesAndPersistsAtomically(t *testing
 	}
 	// Exhausted program POU cursor does not prevent operator-panel exports.
 	ids, err := allocator.WithDiagnosticReservation(1, 1, 1, nil)
-	if err != nil || ids.PageStart != contracts.MaxTransportID {
+	if err != nil || ids.PageStart != xmlidentity.MaxTransportID {
 		t.Fatalf("last page not available: %+v %v", ids, err)
 	}
 	if _, err := allocator.WithDiagnosticReservation(0, 0, 1, nil); err == nil {

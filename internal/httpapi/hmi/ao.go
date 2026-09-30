@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"scheme-xml-generator/internal/aomap"
-	"scheme-xml-generator/internal/generator"
-
+	"scheme-xml-generator/internal/generator/allocation"
+	"scheme-xml-generator/internal/generator/hmi"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	ioao "scheme-xml-generator/internal/httpapi/io/ao"
-
 	"scheme-xml-generator/internal/httpapi/limits"
 	"scheme-xml-generator/internal/httpapi/output"
-
 	"scheme-xml-generator/internal/httpapi/transport"
 )
 
@@ -52,7 +51,7 @@ func (s *Service) HandleAODiagnosticGenerate(w http.ResponseWriter, r *http.Requ
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
-	plans, err := generator.PrepareAODiagnosticPlans(plan, selection.ControllerNames, ctx)
+	plans, err := hmi.PrepareAODiagnosticPlans(plan, selection.ControllerNames, ctx)
 	if err != nil {
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
@@ -68,7 +67,7 @@ func (s *Service) HandleAODiagnosticGenerate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	items := make([]output.ControllerResult, len(plans))
-	_, err = s.Allocator.WithDiagnosticReservation(t11Count, cardCount, frameCount, func(ids generator.DiagnosticIDRange) error {
+	_, err = s.Allocator.WithDiagnosticReservation(t11Count, cardCount, frameCount, func(ids xmlidentity.DiagnosticIDRange) error {
 		for index, part := range plans {
 			result, err := s.Generator.GenerateAODiagnostic(part, ctx, ids)
 			if err != nil {
@@ -82,7 +81,7 @@ func (s *Service) HandleAODiagnosticGenerate(w http.ResponseWriter, r *http.Requ
 		return nil
 	})
 	if err != nil {
-		var persistenceErr *generator.AllocatorPersistenceError
+		var persistenceErr *allocation.AllocatorPersistenceError
 		if errors.As(err, &persistenceErr) {
 			transport.WriteError(w, http.StatusInternalServerError, err)
 		} else {

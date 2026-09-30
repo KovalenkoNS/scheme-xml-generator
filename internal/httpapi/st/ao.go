@@ -3,15 +3,13 @@ package st
 
 import (
 	"errors"
-	"scheme-xml-generator/internal/aomap"
-
 	"net/http"
-	"scheme-xml-generator/internal/generator"
-
+	"scheme-xml-generator/internal/aomap"
+	"scheme-xml-generator/internal/generator/allocation"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
+	"scheme-xml-generator/internal/generator/st"
 	ioao "scheme-xml-generator/internal/httpapi/io/ao"
-
 	"scheme-xml-generator/internal/httpapi/output"
-
 	"scheme-xml-generator/internal/httpapi/transport"
 )
 
@@ -42,7 +40,7 @@ func (s *Service) HandleAOSTGenerate(w http.ResponseWriter, r *http.Request) {
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
-	controllerPlans, err := generator.PrepareAOSTPlans(plan, request)
+	controllerPlans, err := st.PrepareAOSTPlans(plan, request)
 	if err != nil {
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
@@ -54,7 +52,7 @@ func (s *Service) HandleAOSTGenerate(w http.ResponseWriter, r *http.Request) {
 	items := make([]output.ControllerResult, len(controllerPlans))
 	// All validation and all ST documents succeed before IDs are committed.
 	// ST has no graphic T11/card records: only the POU cursor advances.
-	_, err = s.Allocator.WithReservation(0, 0, pouCount, generator.ReservationOptions{}, func(ids generator.IDRange) error {
+	_, err = s.Allocator.WithReservation(0, 0, pouCount, allocation.ReservationOptions{}, func(ids xmlidentity.IDRange) error {
 		for index, part := range controllerPlans {
 			result, err := s.Generator.GenerateAOST(part, ctx, ids)
 			if err != nil {
@@ -66,7 +64,7 @@ func (s *Service) HandleAOSTGenerate(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		var persistenceErr *generator.AllocatorPersistenceError
+		var persistenceErr *allocation.AllocatorPersistenceError
 		if errors.As(err, &persistenceErr) {
 			transport.WriteError(w, http.StatusInternalServerError, err)
 		} else {

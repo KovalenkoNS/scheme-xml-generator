@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/iomap"
 	"strings"
@@ -49,14 +50,14 @@ func plcDiagnosticTestSource() *iomap.Plan {
 
 // buildPLCDiagnosticTest prepares and renders the synthetic inventory using HMI defaults, returning its plan, XML
 // bytes and decoded document.
-func buildPLCDiagnosticTest(t *testing.T) (PLCDiagnosticPlan, contracts.Result, plcDiagnosticDocument) {
+func buildPLCDiagnosticTest(t *testing.T) (PLCDiagnosticPlan, xmlartifact.Result, plcDiagnosticDocument) {
 	t.Helper()
 	ctx := DefaultHMIContext()
 	plans, err := PreparePLCDiagnosticPlans(plcDiagnosticTestSource(), []iomap.Selection{{Key: "B01:cabinet"}}, ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +156,7 @@ func TestPLCDiagnosticFrameHeadersBindModuleDiagnostics(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+			result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -225,7 +226,7 @@ func TestPLCDiagnosticRenameSnapshotAndNoForeignBindings(t *testing.T) {
 	}
 	source.Controllers[0].Modules[0].Channels[0].Tag = "CORRUPTED"
 	source.Controllers[0].Racks[0].Panel = "invalid"
-	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,11 +264,11 @@ func TestPLCDiagnosticRejectsInvalidPlans(t *testing.T) {
 	}
 	plan, _, _ := buildPLCDiagnosticTest(t)
 	plan.T11Count--
-	if _, err := (Generator{}).GeneratePLCDiagnostic(plan, DefaultHMIContext(), contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000}); err == nil {
+	if _, err := (Generator{}).GeneratePLCDiagnostic(plan, DefaultHMIContext(), xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000}); err == nil {
 		t.Fatal("accepted changed reservation")
 	}
 	plan.T11Count++
-	if _, err := (Generator{}).GeneratePLCDiagnostic(plan, DefaultHMIContext(), contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 4705}); err == nil {
+	if _, err := (Generator{}).GeneratePLCDiagnostic(plan, DefaultHMIContext(), xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 4705}); err == nil {
 		t.Fatal("accepted collision with external group")
 	}
 }
@@ -316,7 +317,7 @@ func TestPLCDiagnosticEmptyRearAndMoreThanTwoRacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], DefaultHMIContext(), contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], DefaultHMIContext(), xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -348,7 +349,7 @@ func TestPLCDiagnosticMixedWidthRacksChooseNaturalFirstCPU(t *testing.T) {
 	if plans[0].Controller.Racks[0].Name != "A2" || plans[0].Controller.Modules[0].Name != "A2_02" {
 		t.Fatal("rack/module sorting is not natural numeric order")
 	}
-	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
+	result, err := (Generator{}).GeneratePLCDiagnostic(plans[0], ctx, xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 2000000, PageStart: 3000000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +401,7 @@ func TestPLCDiagnosticFullIOIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids := contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 1000000, PageStart: 1000000}
+	ids := xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 1000000, PageStart: 1000000}
 	var modules, signals int
 	for _, plan := range plans {
 		result, err := (Generator{}).GeneratePLCDiagnostic(plan, ctx, ids)

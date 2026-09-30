@@ -8,12 +8,26 @@ import (
 )
 
 // auditImports prevents subject generators from reaching through sibling implementations.
-// FBD/ST/HMI depend on explicit shared contracts, models, profiles and planning;
-// the compatibility facade is the only production dispatcher among subjects.
+// FBD/ST/HMI use owned requests/results and models; HTTP composes their public APIs directly.
 func auditImports(relative string, file *ast.File) []string {
 	var failures []string
 	for _, declaration := range file.Imports {
 		name, _ := strconv.Unquote(declaration.Path.Value)
+		if name == "scheme-xml-generator/internal/generator" || strings.HasPrefix(name, "scheme-xml-generator/internal/generator/contracts") {
+			failures = append(failures, "CODE-003: aggregate generator API or mixed contracts dependency: "+relative+": "+name)
+		}
+		for _, subject := range []string{"fbd", "st", "hmi"} {
+			if strings.HasPrefix(relative, "internal/httpapi/"+subject+"/") {
+				for _, sibling := range []string{"fbd", "st", "hmi"} {
+					if sibling != subject && name == "scheme-xml-generator/internal/generator/"+sibling {
+						failures = append(failures, "CODE-003: HTTP subject depends on sibling generator: "+relative+": "+name)
+					}
+				}
+			}
+		}
+		if strings.HasPrefix(relative, "internal/httpapi/workspace/") && strings.HasPrefix(name, "scheme-xml-generator/internal/generator/") {
+			failures = append(failures, "CODE-003: workspace settings depend on generation behavior: "+relative+": "+name)
+		}
 		if strings.HasPrefix(relative, "internal/domain/") && strings.HasPrefix(name, "scheme-xml-generator/internal/") && !strings.HasPrefix(name, "scheme-xml-generator/internal/domain/") {
 			failures = append(failures, "CODE-003: domain model depends on an adapter or renderer: "+relative+": "+name)
 		}

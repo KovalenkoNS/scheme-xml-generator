@@ -4,25 +4,23 @@ package output
 import (
 	"fmt"
 	"net/http"
-	"path/filepath"
-	"scheme-xml-generator/internal/generator"
-
-	"scheme-xml-generator/internal/httpapi/transport"
-
 	"net/url"
+	"path/filepath"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	"scheme-xml-generator/internal/httpapi/transport"
 )
 
 type GenerateResponse struct {
-	FileName string            `json:"fileName"`
-	URL      string            `json:"url"`
-	BaseName string            `json:"baseName"`
-	Summary  generator.Summary `json:"summary"`
-	Warnings []string          `json:"warnings"`
+	FileName string              `json:"fileName"`
+	URL      string              `json:"url"`
+	BaseName string              `json:"baseName"`
+	Summary  xmlartifact.Summary `json:"summary"`
+	Warnings []string            `json:"warnings"`
 }
 
 // WriteGeneratedResult сохраняет одиночный XML-результат FBD и формирует ссылку интерфейсу.
 // Под блокировкой выбирает свободное имя, атомарно пишет XML и возвращает summary/warnings.
-func (s *Store) WriteGeneratedResult(w http.ResponseWriter, requestedName, fallbackName string, result generator.Result) {
+func (s *Store) WriteGeneratedResult(w http.ResponseWriter, requestedName, fallbackName string, result xmlartifact.Result) {
 	fileName := SafeOutputName(requestedName, result.BaseName, fallbackName)
 	s.outputMu.Lock()
 	defer s.outputMu.Unlock()

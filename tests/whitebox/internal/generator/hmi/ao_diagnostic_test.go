@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"scheme-xml-generator/internal/aomap"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	aofixture "scheme-xml-generator/tests/support/aomap"
 	"scheme-xml-generator/tests/support/fixtures"
@@ -55,7 +55,7 @@ func TestAODiagnosticNativeProfileWithoutDevelopmentFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := (Generator{}).GenerateAODiagnostic(plans[0], ctx, contracts.DiagnosticIDRange{T11Start: 590411, CardStart: 205414, PageStart: 5248})
+	result, err := (Generator{}).GenerateAODiagnostic(plans[0], ctx, xmlidentity.DiagnosticIDRange{T11Start: 590411, CardStart: 205414, PageStart: 5248})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestAODiagnosticMatchesNativeDevelopmentExport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := (Generator{}).GenerateAODiagnostic(plans[0], ctx, contracts.DiagnosticIDRange{T11Start: 590411, CardStart: 205414, PageStart: 5248})
+	result, err := (Generator{}).GenerateAODiagnostic(plans[0], ctx, xmlidentity.DiagnosticIDRange{T11Start: 590411, CardStart: 205414, PageStart: 5248})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestAODiagnosticActualMapHasOneFilePerPLCAndOneFramePerModule(t *testing.T)
 	if len(plans) != 8 {
 		t.Fatalf("got %d PLC files, want 8", len(plans))
 	}
-	ids := contracts.DiagnosticIDRange{T11Start: 5000000, CardStart: 900000, PageStart: 1000000}
+	ids := xmlidentity.DiagnosticIDRange{T11Start: 5000000, CardStart: 900000, PageStart: 1000000}
 	frames, signals, cards := 0, 0, 0
 	allT11, allCards, allPages := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, plan := range plans {
@@ -325,31 +325,31 @@ func TestHMIContextAndSigned32BitBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx.Project, ctx.Version, ctx.ResourceNumber = "project&example<>", "0", "1"
-	last := contracts.DiagnosticIDRange{T11Start: contracts.MaxTransportID - 4, CardStart: contracts.MaxTransportID - 3, PageStart: contracts.MaxTransportID}
+	last := xmlidentity.DiagnosticIDRange{T11Start: xmlidentity.MaxTransportID - 4, CardStart: xmlidentity.MaxTransportID - 3, PageStart: xmlidentity.MaxTransportID}
 	result, err := (Generator{}).GenerateAODiagnostic(plans[0], ctx, last)
 	if err != nil {
 		t.Fatal(err)
 	}
 	doc := parseAODiagnosticDocument(t, result.XML)
-	if doc.Common.Project != ctx.Project || doc.Common.Version != "0" || !strings.HasPrefix(doc.Cards[0].Info, "2/FCS1/1/") || doc.Pages[0].ID != strconv.FormatInt(contracts.MaxTransportID, 10) || result.Summary.T11Last != contracts.MaxTransportID || result.Summary.CardLast != contracts.MaxTransportID {
+	if doc.Common.Project != ctx.Project || doc.Common.Version != "0" || !strings.HasPrefix(doc.Cards[0].Info, "2/FCS1/1/") || doc.Pages[0].ID != strconv.FormatInt(xmlidentity.MaxTransportID, 10) || result.Summary.T11Last != xmlidentity.MaxTransportID || result.Summary.CardLast != xmlidentity.MaxTransportID {
 		t.Fatal("explicit zero version, positive resource number or last valid ID not preserved")
 	}
 	for _, test := range []struct {
 		name string
-		edit func(*HMIContext, *contracts.DiagnosticIDRange)
+		edit func(*HMIContext, *xmlidentity.DiagnosticIDRange)
 	}{
-		{"T11 overflow", func(_ *HMIContext, ids *contracts.DiagnosticIDRange) { ids.T11Start++ }},
-		{"card overflow", func(_ *HMIContext, ids *contracts.DiagnosticIDRange) { ids.CardStart++ }},
-		{"page overflow", func(_ *HMIContext, ids *contracts.DiagnosticIDRange) { ids.PageStart++ }},
-		{"T11 zero", func(_ *HMIContext, ids *contracts.DiagnosticIDRange) { ids.T11Start = 0 }},
-		{"card negative", func(_ *HMIContext, ids *contracts.DiagnosticIDRange) { ids.CardStart = -1 }},
-		{"page zero", func(_ *HMIContext, ids *contracts.DiagnosticIDRange) { ids.PageStart = 0 }},
-		{"version overflow", func(ctx *HMIContext, _ *contracts.DiagnosticIDRange) { ctx.Version = "2147483648" }},
-		{"resource negative", func(ctx *HMIContext, _ *contracts.DiagnosticIDRange) { ctx.ResourceNumber = "-1" }},
-		{"resource zero", func(ctx *HMIContext, _ *contracts.DiagnosticIDRange) { ctx.ResourceNumber = "0" }},
-		{"resource path injection", func(ctx *HMIContext, _ *contracts.DiagnosticIDRange) { ctx.ResourceNumber = "1/_BAD" }},
-		{"project control", func(ctx *HMIContext, _ *contracts.DiagnosticIDRange) { ctx.Project = "abc\x01" }},
-		{"project UTF8", func(ctx *HMIContext, _ *contracts.DiagnosticIDRange) { ctx.Project = string([]byte{0xff}) }},
+		{"T11 overflow", func(_ *HMIContext, ids *xmlidentity.DiagnosticIDRange) { ids.T11Start++ }},
+		{"card overflow", func(_ *HMIContext, ids *xmlidentity.DiagnosticIDRange) { ids.CardStart++ }},
+		{"page overflow", func(_ *HMIContext, ids *xmlidentity.DiagnosticIDRange) { ids.PageStart++ }},
+		{"T11 zero", func(_ *HMIContext, ids *xmlidentity.DiagnosticIDRange) { ids.T11Start = 0 }},
+		{"card negative", func(_ *HMIContext, ids *xmlidentity.DiagnosticIDRange) { ids.CardStart = -1 }},
+		{"page zero", func(_ *HMIContext, ids *xmlidentity.DiagnosticIDRange) { ids.PageStart = 0 }},
+		{"version overflow", func(ctx *HMIContext, _ *xmlidentity.DiagnosticIDRange) { ctx.Version = "2147483648" }},
+		{"resource negative", func(ctx *HMIContext, _ *xmlidentity.DiagnosticIDRange) { ctx.ResourceNumber = "-1" }},
+		{"resource zero", func(ctx *HMIContext, _ *xmlidentity.DiagnosticIDRange) { ctx.ResourceNumber = "0" }},
+		{"resource path injection", func(ctx *HMIContext, _ *xmlidentity.DiagnosticIDRange) { ctx.ResourceNumber = "1/_BAD" }},
+		{"project control", func(ctx *HMIContext, _ *xmlidentity.DiagnosticIDRange) { ctx.Project = "abc\x01" }},
+		{"project UTF8", func(ctx *HMIContext, _ *xmlidentity.DiagnosticIDRange) { ctx.Project = string([]byte{0xff}) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, ids := DefaultHMIContext(), last
@@ -375,7 +375,7 @@ func TestAODiagnosticDirectPlanCannotBypassValidationOrCounts(t *testing.T) {
 	}
 	plan := plans[0]
 	plan.CardCount, plan.T11Count, plan.FrameCount, plan.SignalCount = 0, 0, 0, 0
-	ids := contracts.DiagnosticIDRange{T11Start: 1000, CardStart: 2000, PageStart: 3000}
+	ids := xmlidentity.DiagnosticIDRange{T11Start: 1000, CardStart: 2000, PageStart: 3000}
 	result, err := (Generator{}).GenerateAODiagnostic(plan, DefaultHMIContext(), ids)
 	if err != nil || result.Summary.FrameCount != 1 || result.Summary.Graphics != 5 || result.Summary.Cards != 4 {
 		t.Fatalf("stale direct-plan counters were trusted: %+v %v", result.Summary, err)

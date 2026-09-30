@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"sync"
 )
 
@@ -52,38 +52,38 @@ func NewAllocator(path string, defaults config.IDDefaults) (*Allocator, error) {
 		return nil, fmt.Errorf("прочитать state.json: %w", err)
 	}
 	if allocator.state.NextT11 < 1 || allocator.state.NextCard < 1 || allocator.state.NextPOU < 1 ||
-		allocator.state.NextPage < 1 || allocator.state.NextT11 > contracts.MaxTransportID+1 || allocator.state.NextCard > contracts.MaxTransportID+1 || allocator.state.NextPOU > contracts.MaxTransportID+1 || allocator.state.NextPage > contracts.MaxTransportID+1 {
-		return nil, fmt.Errorf("state.json содержит ID вне диапазона 1..%d", contracts.MaxTransportID+1)
+		allocator.state.NextPage < 1 || allocator.state.NextT11 > xmlidentity.MaxTransportID+1 || allocator.state.NextCard > xmlidentity.MaxTransportID+1 || allocator.state.NextPOU > xmlidentity.MaxTransportID+1 || allocator.state.NextPage > xmlidentity.MaxTransportID+1 {
+		return nil, fmt.Errorf("state.json содержит ID вне диапазона 1..%d", xmlidentity.MaxTransportID+1)
 	}
 	return allocator, nil
 }
 
 // Reserve Резервирует диапазоны примитивов и карточек для одной POU через общий allocator.
 // Возвращает начала диапазонов либо ошибку сохранения состояния ID.
-func (a *Allocator) Reserve(t11Count, cardCount int) (contracts.IDRange, error) {
+func (a *Allocator) Reserve(t11Count, cardCount int) (xmlidentity.IDRange, error) {
 	return a.ReserveMany(t11Count, cardCount, 1)
 }
 
 // ReserveMany reserves document-wide ranges for generated primitives, cards
 // and automatic POU IDs. The state is committed only after the replacement
 // state file has been written successfully.
-func (a *Allocator) ReserveMany(t11Count, cardCount, pouCount int) (contracts.IDRange, error) {
+func (a *Allocator) ReserveMany(t11Count, cardCount, pouCount int) (xmlidentity.IDRange, error) {
 	return a.WithReservation(t11Count, cardCount, pouCount, ReservationOptions{}, nil)
 }
 
 // WithReservation holds the allocator lock while consume validates and builds
 // a document, then commits the state only when consume succeeds. This prevents
 // invalid requests from consuming IDs and serializes concurrent generations.
-func (a *Allocator) WithReservation(t11Count, cardCount, pouCount int, options ReservationOptions, consume func(contracts.IDRange) error) (contracts.IDRange, error) {
+func (a *Allocator) WithReservation(t11Count, cardCount, pouCount int, options ReservationOptions, consume func(xmlidentity.IDRange) error) (xmlidentity.IDRange, error) {
 	if t11Count < 0 || cardCount < 0 || pouCount < 1 {
-		return contracts.IDRange{}, fmt.Errorf("число T11ID и cardId должно быть неотрицательным, число POU — положительным")
+		return xmlidentity.IDRange{}, fmt.Errorf("число T11ID и cardId должно быть неотрицательным, число POU — положительным")
 	}
 	if len(options.POUIDs) > pouCount {
-		return contracts.IDRange{}, fmt.Errorf("число ручных POU ID превышает число POU")
+		return xmlidentity.IDRange{}, fmt.Errorf("число ручных POU ID превышает число POU")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	result := contracts.IDRange{T11Start: a.state.NextT11, CardStart: a.state.NextCard, POUID: a.state.NextPOU}
+	result := xmlidentity.IDRange{T11Start: a.state.NextT11, CardStart: a.state.NextCard, POUID: a.state.NextPOU}
 	if options.T11Start != nil {
 		result.T11Start = *options.T11Start
 	}
@@ -94,11 +94,11 @@ func (a *Allocator) WithReservation(t11Count, cardCount, pouCount int, options R
 	var err error
 	t11End, err := AddTransportCount(result.T11Start, t11Count, "T11ID")
 	if err != nil {
-		return contracts.IDRange{}, err
+		return xmlidentity.IDRange{}, err
 	}
 	cardEnd, err := AddTransportCount(result.CardStart, cardCount, "cardId")
 	if err != nil {
-		return contracts.IDRange{}, err
+		return xmlidentity.IDRange{}, err
 	}
 	next.NextT11 = max(next.NextT11, t11End)
 	next.NextCard = max(next.NextCard, cardEnd)
@@ -109,28 +109,28 @@ func (a *Allocator) WithReservation(t11Count, cardCount, pouCount int, options R
 		if index < len(options.POUIDs) && options.POUIDs[index] != nil {
 			pouID = *options.POUIDs[index]
 		} else {
-			if result.POUID > contracts.MaxTransportID-int64(index) {
-				return contracts.IDRange{}, fmt.Errorf("диапазон POU ID выходит за signed 32-bit")
+			if result.POUID > xmlidentity.MaxTransportID-int64(index) {
+				return xmlidentity.IDRange{}, fmt.Errorf("диапазон POU ID выходит за signed 32-bit")
 			}
 			pouID = result.POUID + int64(index)
 		}
 		pouEnd, rangeErr := AddTransportCount(pouID, 1, "POU ID")
 		if rangeErr != nil {
-			return contracts.IDRange{}, rangeErr
+			return xmlidentity.IDRange{}, rangeErr
 		}
 		if _, duplicate := usedPOUIDs[pouID]; duplicate {
-			return contracts.IDRange{}, fmt.Errorf("POU ID %d повторяется в резервировании", pouID)
+			return xmlidentity.IDRange{}, fmt.Errorf("POU ID %d повторяется в резервировании", pouID)
 		}
 		usedPOUIDs[pouID] = struct{}{}
 		next.NextPOU = max(next.NextPOU, pouEnd)
 	}
 	if consume != nil {
 		if err := consume(result); err != nil {
-			return contracts.IDRange{}, err
+			return xmlidentity.IDRange{}, err
 		}
 	}
 	if err := a.persist(next); err != nil {
-		return contracts.IDRange{}, &AllocatorPersistenceError{Err: err}
+		return xmlidentity.IDRange{}, &AllocatorPersistenceError{Err: err}
 	}
 	a.state = next
 	return result, nil
@@ -139,31 +139,31 @@ func (a *Allocator) WithReservation(t11Count, cardCount, pouCount int, options R
 // WithDiagnosticReservation shares primitive/card cursors with other exports,
 // but advances only the dedicated page cursor, leaving every POU ID untouched.
 // Preparation, validation and serialization all run before state is committed.
-func (a *Allocator) WithDiagnosticReservation(t11Count, cardCount, pageCount int, consume func(contracts.DiagnosticIDRange) error) (contracts.DiagnosticIDRange, error) {
+func (a *Allocator) WithDiagnosticReservation(t11Count, cardCount, pageCount int, consume func(xmlidentity.DiagnosticIDRange) error) (xmlidentity.DiagnosticIDRange, error) {
 	if t11Count < 0 || cardCount < 0 || pageCount < 1 {
-		return contracts.DiagnosticIDRange{}, fmt.Errorf("число примитивов и карточек должно быть неотрицательным, число кадров — положительным")
+		return xmlidentity.DiagnosticIDRange{}, fmt.Errorf("число примитивов и карточек должно быть неотрицательным, число кадров — положительным")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	result := contracts.DiagnosticIDRange{T11Start: a.state.NextT11, CardStart: a.state.NextCard, PageStart: a.state.NextPage}
+	result := xmlidentity.DiagnosticIDRange{T11Start: a.state.NextT11, CardStart: a.state.NextCard, PageStart: a.state.NextPage}
 	next := a.state
 	var err error
 	if next.NextT11, err = AddTransportCount(result.T11Start, t11Count, "SourceT11ID"); err != nil {
-		return contracts.DiagnosticIDRange{}, err
+		return xmlidentity.DiagnosticIDRange{}, err
 	}
 	if next.NextCard, err = AddTransportCount(result.CardStart, cardCount, "CardID"); err != nil {
-		return contracts.DiagnosticIDRange{}, err
+		return xmlidentity.DiagnosticIDRange{}, err
 	}
 	if next.NextPage, err = AddTransportCount(result.PageStart, pageCount, "PageID"); err != nil {
-		return contracts.DiagnosticIDRange{}, err
+		return xmlidentity.DiagnosticIDRange{}, err
 	}
 	if consume != nil {
 		if err := consume(result); err != nil {
-			return contracts.DiagnosticIDRange{}, err
+			return xmlidentity.DiagnosticIDRange{}, err
 		}
 	}
 	if err := a.persist(next); err != nil {
-		return contracts.DiagnosticIDRange{}, &AllocatorPersistenceError{Err: err}
+		return xmlidentity.DiagnosticIDRange{}, &AllocatorPersistenceError{Err: err}
 	}
 	a.state = next
 	return result, nil
@@ -213,12 +213,12 @@ func (a *Allocator) persist(next AllocatorState) error {
 // Возвращает следующий свободный ID; отклоняет переполнение signed32.
 func AddTransportCount(start int64, count int, label string) (int64, error) {
 	if count == 0 {
-		if start < 1 || start > contracts.MaxTransportID+1 {
+		if start < 1 || start > xmlidentity.MaxTransportID+1 {
 			return 0, fmt.Errorf("начальный %s находится вне signed 32-bit", label)
 		}
 		return start, nil
 	}
-	if start < 1 || start > contracts.MaxTransportID || int64(count-1) > contracts.MaxTransportID-start {
+	if start < 1 || start > xmlidentity.MaxTransportID || int64(count-1) > xmlidentity.MaxTransportID-start {
 		return 0, fmt.Errorf("диапазон %s выходит за signed 32-bit", label)
 	}
 	return start + int64(count), nil

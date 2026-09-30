@@ -4,8 +4,7 @@ package fbd
 import (
 	"fmt"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
-
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"strconv"
 )
 
@@ -30,13 +29,13 @@ func (b *singleBuild) prepareDestination() error {
 		return err
 	}
 	if b.request.POUGroupID != nil {
-		if *b.request.POUGroupID < 1 || *b.request.POUGroupID > contracts.MaxTransportID {
+		if *b.request.POUGroupID < 1 || *b.request.POUGroupID > xmlidentity.MaxTransportID {
 			return fmt.Errorf("POU GroupID должен быть положительным signed 32-bit")
 		}
 		b.groupID = strconv.FormatInt(*b.request.POUGroupID, 10)
 	}
 	if b.request.POUNumber != nil {
-		if *b.request.POUNumber < 1 || *b.request.POUNumber > contracts.MaxTransportID {
+		if *b.request.POUNumber < 1 || *b.request.POUNumber > xmlidentity.MaxTransportID {
 			return fmt.Errorf("POUNum должен быть положительным signed 32-bit")
 		}
 		b.pouNumber = strconv.FormatInt(*b.request.POUNumber, 10)

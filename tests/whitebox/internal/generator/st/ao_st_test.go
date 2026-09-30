@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"scheme-xml-generator/internal/aomap"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	aofixture "scheme-xml-generator/tests/support/aomap"
@@ -70,7 +70,7 @@ func TestAOSTActualMapRetainsAllAssignmentsAndPartitionsController(t *testing.T)
 		assignments += plan.AssignmentCount
 		repeats += plan.RepeatedAssignmentCount
 		pous += len(plan.POUs)
-		result, err := (Generator{}).GenerateAOST(plan, addressing.DefaultAOContext(), contracts.IDRange{POUID: 500})
+		result, err := (Generator{}).GenerateAOST(plan, addressing.DefaultAOContext(), xmlidentity.IDRange{POUID: 500})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +120,7 @@ func TestAOSTCodeMatchesNativeExports(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := (Generator{}).GenerateAOST(plans[0], addressing.DefaultAOContext(), contracts.IDRange{POUID: 1000})
+			result, err := (Generator{}).GenerateAOST(plans[0], addressing.DefaultAOContext(), xmlidentity.IDRange{POUID: 1000})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -178,7 +178,7 @@ func TestAOSTExtraModulesRangesSnapshotAndNumericOrder(t *testing.T) {
 	if got := []string{modules[0].Name, modules[1].Name, modules[2].Name, modules[3].Name}; !reflect.DeepEqual(got, []string{"A11_02", "A11_05", "A11_06", "A11_07"}) {
 		t.Fatalf("wrong ordering/additional names %v", got)
 	}
-	result, err := (Generator{}).GenerateAOST(plans[0], addressing.DefaultAOContext(), contracts.IDRange{POUID: 1})
+	result, err := (Generator{}).GenerateAOST(plans[0], addressing.DefaultAOContext(), xmlidentity.IDRange{POUID: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestAOSTRejectsInvalidRequestsBeforeGeneration(t *testing.T) {
 		{"ID count mismatch", func(_ *aomap.Plan, r *AOSTRequest) { r.POUs[0].ModuleCount = 2 }},
 		{"null ID", func(_ *aomap.Plan, r *AOSTRequest) { r.POUs[0].ModuleIDs[0] = nil }},
 		{"negative ID", func(_ *aomap.Plan, r *AOSTRequest) { *r.POUs[0].ModuleIDs[0] = -1 }},
-		{"overflow ID", func(_ *aomap.Plan, r *AOSTRequest) { *r.POUs[0].ModuleIDs[0] = contracts.MaxTransportID + 1 }},
+		{"overflow ID", func(_ *aomap.Plan, r *AOSTRequest) { *r.POUs[0].ModuleIDs[0] = xmlidentity.MaxTransportID + 1 }},
 		{"repeat ID across POU", func(_ *aomap.Plan, r *AOSTRequest) { *r.POUs[1].ModuleIDs[0] = *r.POUs[0].ModuleIDs[0] }},
 		{"blank FCS", func(p *aomap.Plan, _ *AOSTRequest) { p.Groups[0].ControllerName = "" }},
 		{"bad scale", func(p *aomap.Plan, _ *AOSTRequest) { p.Groups[0].Modules[0].Channels[0].Min = "NaN" }},
@@ -277,7 +277,7 @@ func TestAOSTContextAndTransportRanges(t *testing.T) {
 	}
 	ctx := addressing.DefaultAOContext()
 	ctx.Project, ctx.ControllerID, ctx.ResourceID, ctx.POUNumber, ctx.GroupID = "example&project", "0", "0", "0", "0"
-	result, err := (Generator{}).GenerateAOST(plans[0], ctx, contracts.IDRange{POUID: contracts.MaxTransportID - 1})
+	result, err := (Generator{}).GenerateAOST(plans[0], ctx, xmlidentity.IDRange{POUID: xmlidentity.MaxTransportID - 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,14 +285,14 @@ func TestAOSTContextAndTransportRanges(t *testing.T) {
 	if doc.Common.Project != "example&project" || doc.Common.ControllerID != "0" || doc.POUS.Items[0].Number != "0" || doc.POUS.Items[1].Number != "1" {
 		t.Fatalf("overrides lost: %+v", doc)
 	}
-	if _, err := (Generator{}).GenerateAOST(plans[0], ctx, contracts.IDRange{POUID: contracts.MaxTransportID}); err == nil {
+	if _, err := (Generator{}).GenerateAOST(plans[0], ctx, xmlidentity.IDRange{POUID: xmlidentity.MaxTransportID}); err == nil {
 		t.Fatal("POU ID overflow allowed")
 	}
-	if _, err := (Generator{}).GenerateAOST(plans[0], ctx, contracts.IDRange{}); err == nil {
+	if _, err := (Generator{}).GenerateAOST(plans[0], ctx, xmlidentity.IDRange{}); err == nil {
 		t.Fatal("zero POU ID allowed")
 	}
-	ctx.POUNumber = fmt.Sprint(contracts.MaxTransportID)
-	if _, err := (Generator{}).GenerateAOST(plans[0], ctx, contracts.IDRange{POUID: 1}); err == nil {
+	ctx.POUNumber = fmt.Sprint(xmlidentity.MaxTransportID)
+	if _, err := (Generator{}).GenerateAOST(plans[0], ctx, xmlidentity.IDRange{POUID: 1}); err == nil {
 		t.Fatal("POUNum overflow allowed")
 	}
 }

@@ -3,8 +3,7 @@ package fbd
 
 import (
 	"fmt"
-
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 )
 
 // prepareIDs Applies explicit transport ID overrides for the single document.
@@ -22,7 +21,7 @@ func (b *singleBuild) prepareIDs() error {
 	if b.ids.T11Start < 1 || b.ids.CardStart < 1 || b.ids.POUID < 1 {
 		return fmt.Errorf("начальные ID должны быть положительными")
 	}
-	if b.ids.POUID > contracts.MaxTransportID {
+	if b.ids.POUID > xmlidentity.MaxTransportID {
 		return fmt.Errorf("POU ID должен помещаться в signed 32-bit")
 	}
 	return nil

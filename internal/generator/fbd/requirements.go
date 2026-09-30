@@ -3,11 +3,8 @@ package fbd
 
 import (
 	"fmt"
-
-	"scheme-xml-generator/internal/generator/contracts"
-
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/library"
-
 	"strings"
 )
 
@@ -31,10 +28,10 @@ func (b *singleBuild) classifyPrimitives() error {
 	if b.blockCount+b.linkCount+b.graphicCount != len(b.primitives) {
 		return fmt.Errorf("внутренняя ошибка классификации примитивов")
 	}
-	if b.ids.T11Start > contracts.MaxTransportID-int64(len(b.primitives))+1 {
+	if b.ids.T11Start > xmlidentity.MaxTransportID-int64(len(b.primitives))+1 {
 		return fmt.Errorf("диапазон T11ID выходит за signed 32-bit")
 	}
-	if len(b.cards) > 0 && b.ids.CardStart > contracts.MaxTransportID-int64(len(b.cards))+1 {
+	if len(b.cards) > 0 && b.ids.CardStart > xmlidentity.MaxTransportID-int64(len(b.cards))+1 {
 		return fmt.Errorf("диапазон cardId выходит за signed 32-bit")
 	}
 

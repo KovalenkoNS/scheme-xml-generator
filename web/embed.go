@@ -6,7 +6,7 @@ import (
 	"io/fs"
 )
 
-//go:embed index.html shared shell sources equipment generation library preview
+//go:embed index.html shared shell sources equipment generation library preview host
 var embedded embed.FS
 
 // Files supplies the local HTTP server with the shell, library editor and XML preview.

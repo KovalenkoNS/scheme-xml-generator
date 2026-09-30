@@ -4,13 +4,14 @@ package fbd
 import (
 	"errors"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/allocation"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
 	"scheme-xml-generator/internal/httpapi/transport"
 )
 
 // HandleDocumentGenerate координирует проверку, выполнение и выдачу запроса с массивом POU.
 // Получает готовый JSON-контракт, передаёт план allocator и сохраняет XML только после успеха всех фаз.
-func (s *Service) HandleDocumentGenerate(w http.ResponseWriter, request generator.Request) {
+func (s *Service) HandleDocumentGenerate(w http.ResponseWriter, request fbdrequest.Request) {
 	plan, status, err := s.prepareDocument(request)
 	if err != nil {
 		transport.WriteError(w, status, err)
@@ -19,7 +20,7 @@ func (s *Service) HandleDocumentGenerate(w http.ResponseWriter, request generato
 	result, err := s.generateDocument(plan)
 	if err != nil {
 		status := http.StatusBadRequest
-		var persistence *generator.AllocatorPersistenceError
+		var persistence *allocation.AllocatorPersistenceError
 		if errors.As(err, &persistence) {
 			status = http.StatusInternalServerError
 		}

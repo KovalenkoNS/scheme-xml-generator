@@ -1,0 +1,8 @@
+/* Состояние соединения Host: один текущий адрес/пользователь и обновление без формы входа. */
+.connection { display:flex; align-items:flex-start; gap:15px; }
+.connection-content { flex:1; min-width:0; }
+.connection p { font-size:13px; line-height:1.55; color:var(--muted); margin:7px 0 0; max-width:620px; overflow-wrap:anywhere; }
+.connection-dot { width:9px; height:9px; background:#9eacba; border-radius:50%; margin-top:5px; flex-shrink:0; }
+.connection[data-status="connected"] .connection-dot { background:#247843; }
+.connection button { align-self:flex-start; flex-shrink:0; }
+@media(max-width:520px) { .connection { flex-wrap:wrap; gap:10px; } .connection-content { flex-basis:calc(100% - 24px); } .connection button { margin-left:19px; } }

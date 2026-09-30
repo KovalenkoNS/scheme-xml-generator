@@ -3,7 +3,7 @@ package hmi
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"strconv"
 	"strings"
 )
@@ -14,7 +14,7 @@ func validatePLCReferences(doc plcDiagnosticDocument) error {
 	fail := func(what string) error { return fmt.Errorf("диагностика ПЛК: %s", what) }
 	validID := func(id string) bool {
 		n, err := strconv.ParseInt(id, 10, 64)
-		return err == nil && n > 0 && n <= contracts.MaxTransportID
+		return err == nil && n > 0 && n <= xmlidentity.MaxTransportID
 	}
 	cards, params, pics, symbols, groups := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]string{}
 	for _, card := range doc.Cards {

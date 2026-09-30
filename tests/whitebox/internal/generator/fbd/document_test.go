@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator/contracts"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"scheme-xml-generator/internal/library"
 	"strconv"
@@ -20,25 +21,25 @@ func TestGenerateDocumentTwoSignalsInOnePOU(t *testing.T) {
 	groupID, pouNumber := int64(19022), int64(9)
 	width, height := 2500, 1200
 	background, dparams := "15461355", "3"
-	resolved := []contracts.ResolvedPOU{{
-		Request: contracts.POURequest{
+	resolved := []fbdrequest.ResolvedPOU{{
+		Request: fbdrequest.POURequest{
 			Name: "AD3_GROUP", Description: "Два сигнала", GroupID: &groupID, POUNumber: &pouNumber,
-			Page: contracts.PageRequest{Width: &width, Height: &height, BackgroundColor: &background, DParams: &dparams},
+			Page: fbdrequest.PageRequest{Width: &width, Height: &height, BackgroundColor: &background, DParams: &dparams},
 		},
-		Signals: []contracts.ResolvedSignal{
-			{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_TEST_AD3_A", NameMode: "base"}},
-			{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_TEST_AD3_B", NameMode: "base"}},
+		Signals: []fbdrequest.ResolvedSignal{
+			{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_TEST_AD3_A", NameMode: "base"}},
+			{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_TEST_AD3_B", NameMode: "base"}},
 		},
 	}}
 	requirements, err := RequirementsForDocument(resolved)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if requirements != (contracts.DocumentRequirements{T11Count: 18, CardCount: 6, POUCount: 1, SignalCount: 2}) {
+	if requirements != (xmlidentity.DocumentRequirements{T11Count: 18, CardCount: 6, POUCount: 1, SignalCount: 2}) {
 		t.Fatalf("requirements=%+v", requirements)
 	}
 
-	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, resolved, contracts.IDRange{T11Start: 4100000, CardStart: 810000, POUID: 210000})
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, resolved, xmlidentity.IDRange{T11Start: 4100000, CardStart: 810000, POUID: 210000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,17 +77,17 @@ func TestGenerateDocumentTwoPOUsHaveIndependentSettingsAndCoordinates(t *testing
 	firstNumber, secondNumber := int64(21), int64(22)
 	firstWidth, secondWidth := 2100, 3100
 	firstBackground, secondBackground := "100", "200"
-	resolved := []contracts.ResolvedPOU{
+	resolved := []fbdrequest.ResolvedPOU{
 		{
-			Request: contracts.POURequest{Name: "AD3_POU_A", POUID: &firstID, GroupID: &firstGroup, POUNumber: &firstNumber, Page: contracts.PageRequest{Width: &firstWidth, BackgroundColor: &firstBackground}},
-			Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_POU_A_SIGNAL", NameMode: "base"}}},
+			Request: fbdrequest.POURequest{Name: "AD3_POU_A", POUID: &firstID, GroupID: &firstGroup, POUNumber: &firstNumber, Page: fbdrequest.PageRequest{Width: &firstWidth, BackgroundColor: &firstBackground}},
+			Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_POU_A_SIGNAL", NameMode: "base"}}},
 		},
 		{
-			Request: contracts.POURequest{Name: "AD3_POU_B", POUID: &secondID, GroupID: &secondGroup, POUNumber: &secondNumber, Page: contracts.PageRequest{Width: &secondWidth, BackgroundColor: &secondBackground}},
-			Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_POU_B_SIGNAL", NameMode: "base"}}},
+			Request: fbdrequest.POURequest{Name: "AD3_POU_B", POUID: &secondID, GroupID: &secondGroup, POUNumber: &secondNumber, Page: fbdrequest.PageRequest{Width: &secondWidth, BackgroundColor: &secondBackground}},
+			Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_POU_B_SIGNAL", NameMode: "base"}}},
 		},
 	}
-	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, resolved, contracts.IDRange{T11Start: 4200000, CardStart: 820000, POUID: 220000})
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, resolved, xmlidentity.IDRange{T11Start: 4200000, CardStart: 820000, POUID: 220000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,14 +122,14 @@ func TestGenerateDocumentMixesLinkedAndLinklessTemplatesInOnePOU(t *testing.T) {
 	linked := loadTemplateByID(t, "19963")
 	linkless := loadTemplateByID(t, "17510")
 	pouNumber := int64(61)
-	resolved := []contracts.ResolvedPOU{{
-		Request: contracts.POURequest{Name: "MIXED_POU", POUNumber: &pouNumber},
-		Signals: []contracts.ResolvedSignal{
-			{Ref: linked, Request: contracts.SignalRequest{TemplateKey: linked.Key, ObjectName: "_MIXED_ADR", NameMode: "base"}},
-			{Ref: linkless, Request: contracts.SignalRequest{TemplateKey: linkless.Key, ObjectName: "_MIXED_AD3", NameMode: "base"}},
+	resolved := []fbdrequest.ResolvedPOU{{
+		Request: fbdrequest.POURequest{Name: "MIXED_POU", POUNumber: &pouNumber},
+		Signals: []fbdrequest.ResolvedSignal{
+			{Ref: linked, Request: fbdrequest.SignalRequest{TemplateKey: linked.Key, ObjectName: "_MIXED_ADR", NameMode: "base"}},
+			{Ref: linkless, Request: fbdrequest.SignalRequest{TemplateKey: linkless.Key, ObjectName: "_MIXED_AD3", NameMode: "base"}},
 		},
 	}}
-	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, resolved, contracts.IDRange{T11Start: 4_500_000, CardStart: 850_000, POUID: 250_000})
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, resolved, xmlidentity.IDRange{T11Start: 4_500_000, CardStart: 850_000, POUID: 250_000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,11 +150,11 @@ func TestGenerateDocumentMixesLinkedAndLinklessTemplatesInOnePOU(t *testing.T) {
 func TestGenerateDocumentRejectsDuplicateGlobalCardInfo(t *testing.T) {
 	ref := loadAD3V2Template(t)
 	firstNumber, secondNumber := int64(31), int64(32)
-	resolved := []contracts.ResolvedPOU{
-		{Request: contracts.POURequest{Name: "POU_A", POUNumber: &firstNumber}, Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_DUPLICATE", NameMode: "base"}}}},
-		{Request: contracts.POURequest{Name: "POU_B", POUNumber: &secondNumber}, Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_duplicate", NameMode: "base"}}}},
+	resolved := []fbdrequest.ResolvedPOU{
+		{Request: fbdrequest.POURequest{Name: "POU_A", POUNumber: &firstNumber}, Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_DUPLICATE", NameMode: "base"}}}},
+		{Request: fbdrequest.POURequest{Name: "POU_B", POUNumber: &secondNumber}, Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_duplicate", NameMode: "base"}}}},
 	}
-	if _, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, resolved, contracts.IDRange{T11Start: 4300000, CardStart: 830000, POUID: 230000}); err == nil {
+	if _, err := (Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, resolved, xmlidentity.IDRange{T11Start: 4300000, CardStart: 830000, POUID: 230000}); err == nil {
 		t.Fatal("duplicate global Card.Info was accepted")
 	}
 }
@@ -163,11 +164,11 @@ func TestGenerateDocumentRejectsDuplicateGlobalCardInfo(t *testing.T) {
 func TestGenerateDocumentWithOnlyManualPOUsDoesNotNeedAutomaticPOURange(t *testing.T) {
 	ref := loadAD3V2Template(t)
 	pouID := int64(42)
-	resolved := []contracts.ResolvedPOU{{
-		Request: contracts.POURequest{Name: "MANUAL_POU", POUID: &pouID},
-		Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_MANUAL_SIGNAL", NameMode: "base"}}},
+	resolved := []fbdrequest.ResolvedPOU{{
+		Request: fbdrequest.POURequest{Name: "MANUAL_POU", POUID: &pouID},
+		Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_MANUAL_SIGNAL", NameMode: "base"}}},
 	}}
-	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, resolved, contracts.IDRange{T11Start: 4_600_000, CardStart: 860_000, POUID: contracts.MaxTransportID + 1})
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, resolved, xmlidentity.IDRange{T11Start: 4_600_000, CardStart: 860_000, POUID: xmlidentity.MaxTransportID + 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,15 +182,15 @@ func TestGenerateDocumentWithOnlyManualPOUsDoesNotNeedAutomaticPOURange(t *testi
 func TestGenerateDocumentUsesOnlyActualPOUIDsAtSigned32Boundary(t *testing.T) {
 	ref := loadAD3V2Template(t)
 	manualPOU := int64(1)
-	resolved := []contracts.ResolvedPOU{
-		{Request: contracts.POURequest{Name: "AUTO_LAST"}, Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_AUTO_LAST", NameMode: "base"}}}},
-		{Request: contracts.POURequest{Name: "MANUAL_FIRST", POUID: &manualPOU}, Signals: []contracts.ResolvedSignal{{Ref: ref, Request: contracts.SignalRequest{TemplateKey: ref.Key, ObjectName: "_MANUAL_FIRST", NameMode: "base"}}}},
+	resolved := []fbdrequest.ResolvedPOU{
+		{Request: fbdrequest.POURequest{Name: "AUTO_LAST"}, Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_AUTO_LAST", NameMode: "base"}}}},
+		{Request: fbdrequest.POURequest{Name: "MANUAL_FIRST", POUID: &manualPOU}, Signals: []fbdrequest.ResolvedSignal{{Ref: ref, Request: fbdrequest.SignalRequest{TemplateKey: ref.Key, ObjectName: "_MANUAL_FIRST", NameMode: "base"}}}},
 	}
-	result, err := (Generator{Config: config.Default()}).GenerateDocument(contracts.Request{}, resolved, contracts.IDRange{T11Start: 4_700_000, CardStart: 870_000, POUID: contracts.MaxTransportID})
+	result, err := (Generator{Config: config.Default()}).GenerateDocument(fbdrequest.Request{}, resolved, xmlidentity.IDRange{T11Start: 4_700_000, CardStart: 870_000, POUID: xmlidentity.MaxTransportID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Summary.POUs[0].POUID != contracts.MaxTransportID || result.Summary.POUs[1].POUID != manualPOU {
+	if result.Summary.POUs[0].POUID != xmlidentity.MaxTransportID || result.Summary.POUs[1].POUID != manualPOU {
 		t.Fatalf("unexpected POU IDs: %+v", result.Summary.POUs)
 	}
 }
@@ -198,7 +199,7 @@ func TestGenerateDocumentUsesOnlyActualPOUIDsAtSigned32Boundary(t *testing.T) {
 // with its requested name.
 func TestLegacyGenerateStillProducesOnePOU(t *testing.T) {
 	ref := loadAD3V2Template(t)
-	result, err := (Generator{Config: config.Default()}).Generate(ref, contracts.Request{ObjectName: "_LEGACY_AD3", POUName: "LEGACY_POU", NameMode: "base"}, contracts.IDRange{T11Start: 4400000, CardStart: 840000, POUID: 240000})
+	result, err := (Generator{Config: config.Default()}).Generate(ref, fbdrequest.Request{ObjectName: "_LEGACY_AD3", POUName: "LEGACY_POU", NameMode: "base"}, xmlidentity.IDRange{T11Start: 4400000, CardStart: 840000, POUID: 240000})
 	if err != nil {
 		t.Fatal(err)
 	}

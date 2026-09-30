@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"scheme-xml-generator/internal/generator"
+	programcontext "scheme-xml-generator/internal/generator/program"
 	"strings"
 )
 
 // DecodeMappingContextWithDefault объединяет явно заданные строковые настройки с переданным профилем IO.
 // Проверяет единственный JSON-объект и запрет null, возвращает новый контекст без изменения Config.
-func DecodeMappingContextWithDefault(raw string, result generator.ProgramContext) (generator.ProgramContext, error) {
+func DecodeMappingContextWithDefault(raw string, result programcontext.ProgramContext) (programcontext.ProgramContext, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return result, nil

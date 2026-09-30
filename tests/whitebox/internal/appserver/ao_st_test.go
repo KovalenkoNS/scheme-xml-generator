@@ -10,12 +10,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
-	"testing"
-
 	"scheme-xml-generator/internal/aomap"
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/st"
+	"strings"
+	"testing"
 )
 
 const smallAOSTConfig = `{"pous":[{"groupKey":"FCS_MAIN:A11","moduleCount":1,"moduleIds":[41]}]}`
@@ -33,10 +32,10 @@ type aoSTTestDocument struct {
 // controller.
 func aoSTRequestForPlan(t *testing.T, plan *aomap.Plan) string {
 	t.Helper()
-	request := generator.AOSTRequest{}
+	request := st.AOSTRequest{}
 	next := map[string]int64{}
 	for _, group := range plan.Groups {
-		pou := generator.AOSTPOURequest{GroupKey: group.Key, ModuleCount: len(group.Modules)}
+		pou := st.AOSTPOURequest{GroupKey: group.Key, ModuleCount: len(group.Modules)}
 		for range group.Modules {
 			id := next[group.ControllerName]
 			pou.ModuleIDs = append(pou.ModuleIDs, &id)
@@ -319,11 +318,11 @@ func TestAOSTAPISelectionRemainsIsolatedByController(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			application, statePath, outputDir := aoTestApplication(t)
-			request := generator.AOSTRequest{}
+			request := st.AOSTRequest{}
 			wanted := map[string]map[string]selection{}
 			for _, selected := range test.selected {
 				id := selected.id
-				request.POUs = append(request.POUs, generator.AOSTPOURequest{GroupKey: selected.controllerName + ":" + selected.prefix, ModuleCount: 1, ModuleIDs: []*int64{&id}})
+				request.POUs = append(request.POUs, st.AOSTPOURequest{GroupKey: selected.controllerName + ":" + selected.prefix, ModuleCount: 1, ModuleIDs: []*int64{&id}})
 				if wanted[selected.controllerName] == nil {
 					wanted[selected.controllerName] = map[string]selection{}
 				}

@@ -2,13 +2,10 @@
 package hmi
 
 import (
-	"fmt"
-	"scheme-xml-generator/internal/generator"
-
-	"io"
-
 	"encoding/json"
-
+	"fmt"
+	"io"
+	"scheme-xml-generator/internal/generator/hmi"
 	"strings"
 )
 
@@ -31,8 +28,8 @@ func decodeDiagnosticObject(raw string, target any) error {
 
 // decodeHMIContext объединяет явный контекст диагностики с текущим подтверждённым профилем.
 // Возвращает HMIContext; null вместо строк и некорректный JSON отклоняются до генерации.
-func decodeHMIContext(raw string) (generator.HMIContext, error) {
-	ctx := generator.DefaultHMIContext()
+func decodeHMIContext(raw string) (hmi.HMIContext, error) {
+	ctx := hmi.DefaultHMIContext()
 	if strings.TrimSpace(raw) == "" {
 		return ctx, nil
 	}

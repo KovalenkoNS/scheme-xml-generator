@@ -2,20 +2,17 @@
 package moduleassignment
 
 import (
-	"fmt"
-	"scheme-xml-generator/internal/generator"
-
-	"io"
-
 	"encoding/json"
-
+	"fmt"
+	"io"
+	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"strings"
 )
 
 // decodeModuleAssignmentRequest разбирает единственное поле config совместимого multipart-запроса IO.
 // Возвращает выбор модулей/формата без неизвестных JSON-полей и постороннего хвоста.
-func decodeModuleAssignmentRequest(values []string) (generator.ModuleMappingRequest, error) {
-	var request generator.ModuleMappingRequest
+func decodeModuleAssignmentRequest(values []string) (stassignment.ModuleMappingRequest, error) {
+	var request stassignment.ModuleMappingRequest
 	if len(values) != 1 || !strings.HasPrefix(strings.TrimSpace(values[0]), "{") {
 		return request, fmt.Errorf("укажите настройки назначений модулей в JSON-объекте config")
 	}

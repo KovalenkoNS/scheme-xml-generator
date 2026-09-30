@@ -12,14 +12,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/aomap"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/addressing"
+	"scheme-xml-generator/internal/generator/allocation"
+	programcontext "scheme-xml-generator/internal/generator/program"
+	"scheme-xml-generator/internal/library"
 	"strings"
 	"testing"
 	"testing/fstest"
-
-	"scheme-xml-generator/internal/aomap"
-	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/library"
 )
 
 const smallAOMap = "FCS\tMashalling_cabinet\tModule\tChannel\tDCS AO\tMain_module\tRedundant_module\tI/O Type\tТип объекта\n" +
@@ -32,12 +33,12 @@ func aoTestApplication(t *testing.T) (*Server, string, string) {
 	temp := isolatedHTTPTemp(t)
 	statePath := filepath.Join(temp, "data", "state.json")
 	outputDir := filepath.Join(temp, "output")
-	allocator, err := generator.NewAllocator(statePath, config.Default().IDs)
+	allocator, err := allocation.NewAllocator(statePath, config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// No repository refresh and no library files: the native profile is standalone.
-	application := New(library.NewRepository(filepath.Join(temp, "absent-libraries")), generator.Generator{Config: config.Default()}, allocator, outputDir, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
+	application := New(library.NewRepository(filepath.Join(temp, "absent-libraries")), config.Default(), allocator, outputDir, fstest.MapFS{"index.html": &fstest.MapFile{Data: []byte("ok")}}, log.New(io.Discard, "", 0))
 	return application, statePath, outputDir
 }
 
@@ -92,13 +93,13 @@ func TestAOPreviewAndRetiredFBDWithoutLibraries(t *testing.T) {
 		t.Fatalf("profile status=%d: %s", profile.Code, profile.Body.String())
 	}
 	var profileBody struct {
-		Context     generator.ProgramContext `json:"context"`
-		Description string                   `json:"description"`
+		Context     programcontext.ProgramContext `json:"context"`
+		Description string                        `json:"description"`
 	}
 	if err := json.Unmarshal(profile.Body.Bytes(), &profileBody); err != nil {
 		t.Fatal(err)
 	}
-	if profileBody.Context != generator.DefaultAOContext() || profileBody.Description == "" {
+	if profileBody.Context != addressing.DefaultAOContext() || profileBody.Description == "" {
 		t.Fatalf("bad profile: %+v", profileBody)
 	}
 

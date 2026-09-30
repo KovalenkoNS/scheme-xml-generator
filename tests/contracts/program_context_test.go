@@ -2,24 +2,25 @@
 package contracts_test
 
 import (
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/addressing"
+	hmigen "scheme-xml-generator/internal/generator/hmi"
 	"testing"
 )
 
 // TestModuleAndHMIContextsDoNotInheritAOProject checks generic exports start without a private AO project path.
 // Mutating an AO request also cannot alter later module-ST or HMI defaults.
 func TestModuleAndHMIContextsDoNotInheritAOProject(t *testing.T) {
-	module := generator.DefaultModuleContext()
-	hmi := generator.DefaultHMIContext()
-	ao := generator.DefaultAOContext()
+	module := addressing.DefaultModuleContext()
+	hmi := hmigen.DefaultHMIContext()
+	ao := addressing.DefaultAOContext()
 	ao.Project = "request-specific AO project"
 	if module.Project != "" || hmi.Project != "" {
 		t.Fatalf("private project leaked into generic context: module=%q hmi=%q", module.Project, hmi.Project)
 	}
-	if generator.DefaultModuleContext() != module || generator.DefaultHMIContext() != hmi {
+	if addressing.DefaultModuleContext() != module || hmigen.DefaultHMIContext() != hmi {
 		t.Fatal("AO request changed generic context defaults")
 	}
-	if ao.Project == generator.DefaultAOContext().Project {
+	if ao.Project == addressing.DefaultAOContext().Project {
 		t.Fatal("AO defaults alias request state")
 	}
 }

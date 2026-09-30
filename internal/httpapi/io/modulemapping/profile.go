@@ -3,8 +3,9 @@ package modulemapping
 
 import (
 	"net/http"
-	"scheme-xml-generator/internal/generator"
-
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	"scheme-xml-generator/internal/generator/addressing"
+	programcontext "scheme-xml-generator/internal/generator/program"
 	"scheme-xml-generator/internal/httpapi/transport"
 )
 
@@ -12,16 +13,16 @@ import (
 // Возвращает профили по формату/типу сигнала и честные ограничения исторических образцов.
 func (s *Service) HandleModuleMappingProfile(w http.ResponseWriter, _ *http.Request) {
 	transport.WriteJSON(w, http.StatusOK, map[string]any{
-		"context":          generator.DefaultModuleContext(),
+		"context":          addressing.DefaultModuleContext(),
 		"fbdAvailable":     false,
 		"fbdRoute":         "/api/generate",
-		"contexts":         map[string]generator.ProgramContext{"AI": ContextForMode("AI", "st"), "DO": ContextForMode("DO", "st"), "DI": ContextForMode("DI", "st")},
+		"contexts":         map[string]programcontext.ProgramContext{"AI": ContextForMode("AI", "st"), "DO": ContextForMode("DO", "st"), "DI": ContextForMode("DI", "st")},
 		"doFBDProfiles":    []string{},
-		"controllerTypes":  []string{generator.ControllerCPU715, generator.ControllerCPU850},
-		"physicalProfiles": []string{generator.PhysicalProfileLegacy, generator.PhysicalProfileMeasurement},
+		"controllerTypes":  []string{cpuprofile.ControllerCPU715, cpuprofile.ControllerCPU850},
+		"physicalProfiles": []string{addressing.PhysicalProfileLegacy, addressing.PhysicalProfileMeasurement},
 		"defaultPhysicalProfiles": map[string]string{
-			generator.ControllerCPU715: generator.PhysicalProfileLegacy,
-			generator.ControllerCPU850: generator.PhysicalProfileMeasurement,
+			cpuprofile.ControllerCPU715: addressing.PhysicalProfileLegacy,
+			cpuprofile.ControllerCPU850: addressing.PhysicalProfileMeasurement,
 		},
 		"description": "ST назначает физические каналы выбранных ПЛК. ModuleID задаются явно. FBD создаётся отдельным библиотечным запросом; прежние фиксированные режимы отключены.",
 	})
@@ -29,8 +30,8 @@ func (s *Service) HandleModuleMappingProfile(w http.ResponseWriter, _ *http.Requ
 
 // ContextForMode выбирает исходные транспортные значения подтверждённых ST-образцов по направлению.
 // Возвращает копию контекста с нужными ID/POUNum; не меняет настройки основного генератора.
-func ContextForMode(kind, mode string) generator.ProgramContext {
-	ctx := generator.DefaultModuleContext()
+func ContextForMode(kind, mode string) programcontext.ProgramContext {
+	ctx := addressing.DefaultModuleContext()
 	if kind == "DI" {
 		ctx.ControllerID, ctx.ResourceID, ctx.GroupID = "189312", "644", "19814"
 		ctx.POUNumber = "23"

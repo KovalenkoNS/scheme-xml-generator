@@ -3,7 +3,8 @@ package fbd
 
 import (
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator/contracts"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/library"
 	"testing"
 )
@@ -18,7 +19,7 @@ func TestGenerateUsesContentBoundsForAutomaticOffsetAndPageSize(t *testing.T) {
 	settings.Page.MarginBottom = 10
 	ref := layoutFixture()
 
-	result, err := (Generator{Config: settings}).Generate(ref, contracts.Request{ObjectName: "_LAYOUT", POUName: "LAYOUT_POU", NameMode: "base"}, contracts.IDRange{T11Start: 1000, CardStart: 2000, POUID: 3000})
+	result, err := (Generator{Config: settings}).Generate(ref, fbdrequest.Request{ObjectName: "_LAYOUT", POUName: "LAYOUT_POU", NameMode: "base"}, xmlidentity.IDRange{T11Start: 1000, CardStart: 2000, POUID: 3000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,7 @@ func TestGeneratePreservesExplicitOffsetEvenForNegativeContent(t *testing.T) {
 	settings.Page.MarginRight = 10
 	settings.Page.MarginBottom = 10
 	x, y := 10, 20
-	result, err := (Generator{Config: settings}).Generate(layoutFixture(), contracts.Request{ObjectName: "_LAYOUT", POUName: "LAYOUT_EXPLICIT", NameMode: "base", OffsetX: &x, OffsetY: &y}, contracts.IDRange{T11Start: 1100, CardStart: 2100, POUID: 3100})
+	result, err := (Generator{Config: settings}).Generate(layoutFixture(), fbdrequest.Request{ObjectName: "_LAYOUT", POUName: "LAYOUT_EXPLICIT", NameMode: "base", OffsetX: &x, OffsetY: &y}, xmlidentity.IDRange{T11Start: 1100, CardStart: 2100, POUID: 3100})
 	if err != nil {
 		t.Fatal(err)
 	}

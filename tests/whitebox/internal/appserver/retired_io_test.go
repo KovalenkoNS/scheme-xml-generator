@@ -10,12 +10,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/config"
+	"scheme-xml-generator/internal/generator/allocation"
+	"scheme-xml-generator/internal/library"
 	"testing"
 	"testing/fstest"
-
-	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator"
-	"scheme-xml-generator/internal/library"
 )
 
 // TestAPIDocumentRejectsRetiredIOWithoutChangingExistingResults сначала выпускает обычный библиотечный FBD.
@@ -29,11 +28,11 @@ func TestAPIDocumentRejectsRetiredIOWithoutChangingExistingResults(t *testing.T)
 	key := templateKeyByID(t, catalog, "17510")
 	root := isolatedHTTPTemp(t)
 	statePath, outputDir := filepath.Join(root, "state.json"), filepath.Join(root, "output")
-	allocator, err := generator.NewAllocator(statePath, config.Default().IDs)
+	allocator, err := allocation.NewAllocator(statePath, config.Default().IDs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	application := New(repository, generator.Generator{Config: config.Default()}, allocator, outputDir, fstest.MapFS{}, log.New(io.Discard, "", 0))
+	application := New(repository, config.Default(), allocator, outputDir, fstest.MapFS{}, log.New(io.Discard, "", 0))
 	post := func(pous []any) *httptest.ResponseRecorder {
 		payload, err := json.Marshal(map[string]any{"fileName": "existing-library-result", "pous": pous})
 		if err != nil {

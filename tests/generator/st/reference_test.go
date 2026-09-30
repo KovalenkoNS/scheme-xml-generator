@@ -8,10 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"scheme-xml-generator/internal/generator"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/planning"
+	stgen "scheme-xml-generator/internal/generator/st"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"scheme-xml-generator/internal/generator/xmlmodel"
 	"scheme-xml-generator/internal/inputs/assignments"
@@ -43,7 +43,7 @@ func TestModuleRawWorkbookFullDOPhysicalAssignmentsAndLogicalCounts(t *testing.T
 				signals += plan.SignalCount
 				assignments += plan.AssignmentCount
 				repeats += plan.RepeatedAssignmentCount
-				result, err := (generator.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100000, T11Start: 200000, CardStart: 300000})
+				result, err := (stgen.Generator{}).GenerateModuleMapping(plan, addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 100000, T11Start: 200000, CardStart: 300000})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -122,7 +122,7 @@ func TestModuleActualWorkbookCountsAndDOReferenceAssignments(t *testing.T) {
 				if len(plans) != 1 || plans[0].ModuleCount != tc.modules || plans[0].SignalCount != tc.signals || plans[0].AssignmentCount != wantAssignments {
 					t.Fatalf("counts %+v", plans)
 				}
-				result, err := (generator.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 100000, T11Start: 200000, CardStart: 300000})
+				result, err := (stgen.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 100000, T11Start: 200000, CardStart: 300000})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -243,7 +243,7 @@ func TestModuleDINativeReferenceParity(t *testing.T) {
 		if plans[0].AssignmentCount != 297 || plans[0].RepeatedAssignmentCount != 0 || plans[0].SignalCount != 225 {
 			t.Fatalf("native counts %+v", plans[0])
 		}
-		result, err := (generator.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), contracts.IDRange{POUID: 1000, T11Start: 2000, CardStart: 3000})
+		result, err := (stgen.Generator{}).GenerateModuleMapping(plans[0], addressing.DefaultModuleContext(), xmlidentity.IDRange{POUID: 1000, T11Start: 2000, CardStart: 3000})
 		if err != nil {
 			t.Fatal(err)
 		}

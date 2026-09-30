@@ -12,9 +12,10 @@ import (
 	"scheme-xml-generator/internal/domain/hardware"
 	iomap "scheme-xml-generator/internal/domain/inventory"
 	"scheme-xml-generator/internal/generator/allocation"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
 	"scheme-xml-generator/internal/generator/exportprofile"
 	"scheme-xml-generator/internal/generator/identifiers"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	moduleid "scheme-xml-generator/internal/generator/modules"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"sort"
@@ -133,7 +134,7 @@ func PreparePLCDiagnosticPlans(source *iomap.Plan, selected []iomap.Selection, c
 			return a.Slot < b.Slot
 		})
 		plan := PLCDiagnosticPlan{ControllerName: name, Controller: controller, Warnings: append([]string(nil), source.Warnings...)}
-		_, summary, count, err := buildPLCDiagnostic(plan, ctx, contracts.DiagnosticIDRange{T11Start: 1000000, CardStart: 1000000, PageStart: 1000000})
+		_, summary, count, err := buildPLCDiagnostic(plan, ctx, xmlidentity.DiagnosticIDRange{T11Start: 1000000, CardStart: 1000000, PageStart: 1000000})
 		if err != nil {
 			return nil, err
 		}
@@ -200,11 +201,11 @@ type plcDiagnosticBuilder struct {
 	doc            plcDiagnosticDocument
 	ctx            HMIContext
 	controllerName string
-	ids            contracts.DiagnosticIDRange
+	ids            xmlidentity.DiagnosticIDRange
 	nextID         int64
 	nextPage       int64
 	cards          map[string]string
-	summary        contracts.Summary
+	summary        xmlartifact.Summary
 }
 
 // id Выдаёт следующий ID примитива внутри уже выделенного диапазона HMI.
@@ -240,7 +241,7 @@ func (b *plcDiagnosticBuilder) page(name, path, module string, width, height int
 	id := strconv.FormatInt(b.nextPage, 10)
 	b.nextPage++
 	b.doc.Groups = append(b.doc.Groups, plcDiagnosticGroup{ID: id, FullName: path})
-	b.summary.Frames = append(b.summary.Frames, contracts.DiagnosticFrameSummary{ID: b.nextPage - 1, Name: name, Module: module})
+	b.summary.Frames = append(b.summary.Frames, xmlartifact.DiagnosticFrameSummary{ID: b.nextPage - 1, Name: name, Module: module})
 	return plcDiagnosticPage{IDAttribute: id, ID: id, Name: name, TemplateID: "0", ForMarka: "0", Background: "536870913", DParams: "2", Height: strconv.Itoa(height), GridSize: "10", Width: strconv.Itoa(width), Number: "0", PrintWidth: strconv.Itoa(width), PrintHeight: strconv.Itoa(height), PrintPageA4: "8", FrameNumber: "4", Srez: "1", PageLayers: []plcDiagnosticLayer{{Number: "1", Visible: "1", Name: "[по умолчанию]"}}}
 }
 
@@ -291,12 +292,12 @@ func plcFrameName(controllerName string, module iomap.Module) string {
 
 // buildPLCDiagnostic Собирает диагностические страницы, карточки и переходы по плану ПЛК.
 // Возвращает модель XML, сводку и расход ID для проверки перед сериализацией.
-func buildPLCDiagnostic(plan PLCDiagnosticPlan, ctx HMIContext, ids contracts.DiagnosticIDRange) (plcDiagnosticDocument, contracts.Summary, int, error) {
+func buildPLCDiagnostic(plan PLCDiagnosticPlan, ctx HMIContext, ids xmlidentity.DiagnosticIDRange) (plcDiagnosticDocument, xmlartifact.Summary, int, error) {
 	profile, err := loadPLCDiagnosticProfile()
 	if err != nil {
-		return plcDiagnosticDocument{}, contracts.Summary{}, 0, err
+		return plcDiagnosticDocument{}, xmlartifact.Summary{}, 0, err
 	}
-	b := plcDiagnosticBuilder{ctx: ctx, controllerName: plan.ControllerName, ids: ids, nextID: ids.T11Start, nextPage: ids.PageStart, cards: map[string]string{}, summary: contracts.Summary{POUs: []contracts.POUSummary{}, Frames: []contracts.DiagnosticFrameSummary{}}}
+	b := plcDiagnosticBuilder{ctx: ctx, controllerName: plan.ControllerName, ids: ids, nextID: ids.T11Start, nextPage: ids.PageStart, cards: map[string]string{}, summary: xmlartifact.Summary{POUs: []xmlartifact.POUSummary{}, Frames: []xmlartifact.DiagnosticFrameSummary{}}}
 	b.doc = plcDiagnosticDocument{XMLName: xml.Name{Local: "BufScada"}, Common: outputHMICommon{Version: ctx.Version, Project: ctx.Project}, Colors: profile.Colors, Pictures: profile.Pictures, Symbols: profile.Symbols}
 	b.doc.Groups = []plcDiagnosticGroup{{ID: "4705", FullName: "Диагностика"}, {ID: "6580", FullName: "Служебные шаблоны\\Шаблон диагностики контроллеров_PS"}}
 	rootPath := "Диагностика\\" + plan.ControllerName
@@ -455,16 +456,16 @@ func (b *plcDiagnosticBuilder) panelControls(panel *plcDiagnosticPage, otherID s
 
 // GeneratePLCDiagnostic Экспортирует диагностические HMI-кадры выбранного ПЛК в SCADA XML.
 // Строит модель, сериализует и проверяет её, возвращает файл и сводку без импорта SCADA.
-func (g Generator) GeneratePLCDiagnostic(plan PLCDiagnosticPlan, ctx HMIContext, ids contracts.DiagnosticIDRange) (contracts.Result, error) {
+func (g Generator) GeneratePLCDiagnostic(plan PLCDiagnosticPlan, ctx HMIContext, ids xmlidentity.DiagnosticIDRange) (xmlartifact.Result, error) {
 	ctx, err := normalizeHMIContext(ctx)
 	if err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	if plan.ControllerName != plan.Controller.Name {
-		return contracts.Result{}, fmt.Errorf("диагностика IO: несогласованное имя ПЛК")
+		return xmlartifact.Result{}, fmt.Errorf("диагностика IO: несогласованное имя ПЛК")
 	}
 	if err := validatePLCInventory(plan.Controller); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	for _, item := range []struct {
 		start int64
@@ -472,31 +473,31 @@ func (g Generator) GeneratePLCDiagnostic(plan PLCDiagnosticPlan, ctx HMIContext,
 		name  string
 	}{{ids.T11Start, plan.T11Count, "ID примитивов/рецепторов"}, {ids.CardStart, plan.CardCount, "CardID"}, {ids.PageStart, plan.FrameCount, "PageID"}} {
 		if _, err := allocation.AddTransportCount(item.start, item.count, item.name); err != nil {
-			return contracts.Result{}, err
+			return xmlartifact.Result{}, err
 		}
 	}
 	for _, external := range []int64{4705, 6580} {
 		if external >= ids.PageStart && external < ids.PageStart+int64(plan.FrameCount) {
-			return contracts.Result{}, fmt.Errorf("диагностика IO: диапазон страниц пересекает внешний шаблон %d", external)
+			return xmlartifact.Result{}, fmt.Errorf("диагностика IO: диапазон страниц пересекает внешний шаблон %d", external)
 		}
 	}
 	doc, summary, count, err := buildPLCDiagnostic(plan, ctx, ids)
 	if err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	if count != plan.T11Count || summary.Cards != plan.CardCount || summary.FrameCount != plan.FrameCount || summary.SignalCount != plan.SignalCount {
-		return contracts.Result{}, fmt.Errorf("диагностика IO: план изменился после расчёта ID")
+		return xmlartifact.Result{}, fmt.Errorf("диагностика IO: план изменился после расчёта ID")
 	}
 	data, err := xmlcodec.SerializeSCADAValue(doc)
 	if err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	if err := validateGeneratedPLCDiagnostic(data, doc); err != nil {
-		return contracts.Result{}, err
+		return xmlartifact.Result{}, err
 	}
 	warnings := append([]string(nil), plan.Warnings...)
 	warnings = append(warnings, "Размещение крейтов на передней/задней панели и CPU TENIX-CPU715 в слотах 00/01 первого крейта следует соглашению образца; проверьте его для выбранного шкафа.", "Импортируйте группу ПЛК внутрь группы «Диагностика». Требуются существующие служебный шаблон «Шаблон диагностики контроллеров_PS», мнемосимволы и экземпляры объектов; этот XML не создаёт их программную часть.")
-	return contracts.Result{XML: data, BaseName: "PLC_DIAG", Summary: summary, Warnings: warnings}, nil
+	return xmlartifact.Result{XML: data, BaseName: "PLC_DIAG", Summary: summary, Warnings: warnings}, nil
 }
 
 // validateGeneratedPLCDiagnostic Сверяет сериализованный HMI-документ с ожидаемыми страницами и карточками.

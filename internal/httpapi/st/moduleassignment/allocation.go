@@ -2,7 +2,8 @@
 package moduleassignment
 
 import (
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/allocation"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/httpapi/output"
 	"strings"
 )
@@ -13,7 +14,7 @@ func (s *Service) generateAssignments(plan assignmentPlan) ([]output.ControllerR
 	plans, ctx, requirements, total := plan.Plans, plan.Context, plan.Requirements, plan.Total
 	fileName, request := plan.Input.FileName, plan.Input.Request
 	items := make([]output.ControllerResult, len(plans))
-	_, err := s.Allocator.WithReservation(total.T11Count, total.CardCount, total.POUCount, generator.ReservationOptions{}, func(ids generator.IDRange) error {
+	_, err := s.Allocator.WithReservation(total.T11Count, total.CardCount, total.POUCount, allocation.ReservationOptions{}, func(ids xmlidentity.IDRange) error {
 		for index, plan := range plans {
 			result, generateErr := s.ST.GenerateModuleAssignments(plan, ctx, ids)
 			if generateErr != nil {

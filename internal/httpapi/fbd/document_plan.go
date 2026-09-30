@@ -4,27 +4,29 @@ package fbd
 import (
 	"fmt"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
+	"scheme-xml-generator/internal/generator/fbd"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/httpapi/limits"
 	"strings"
 )
 
 type preparedDocument struct {
-	Request      generator.Request
-	POUs         []generator.ResolvedPOU
-	Requirements generator.DocumentRequirements
+	Request      fbdrequest.Request
+	POUs         []fbdrequest.ResolvedPOU
+	Requirements xmlidentity.DocumentRequirements
 	POUIDs       []*int64
 }
 
 // prepareDocument отклоняет прежнее аппаратное дополнение, разрешает библиотечные ссылки и считает FBD-план.
 // Возвращает нормализованный запрос/требования ID либо ошибку со статусом; allocator и output не изменяет.
-func (s *Service) prepareDocument(request generator.Request) (preparedDocument, int, error) {
+func (s *Service) prepareDocument(request fbdrequest.Request) (preparedDocument, int, error) {
 	for _, pou := range request.POUs {
 		if pou.IO != nil {
 			return preparedDocument{}, http.StatusGone, fmt.Errorf("формат io.modules отключён. FBD создаётся только из подключённой библиотеки. Выберите шаблон на основной странице")
 		}
 	}
-	normalized, err := generator.NormalizePOURequests(request.POUs)
+	normalized, err := fbd.NormalizePOURequests(request.POUs)
 	if err != nil {
 		return preparedDocument{}, http.StatusBadRequest, err
 	}
@@ -48,7 +50,7 @@ func (s *Service) prepareDocument(request generator.Request) (preparedDocument, 
 	if err != nil {
 		return preparedDocument{}, http.StatusBadRequest, err
 	}
-	requirements, err := generator.RequirementsForDocument(resolved)
+	requirements, err := fbd.RequirementsForDocument(resolved)
 	if err != nil {
 		return preparedDocument{}, http.StatusBadRequest, err
 	}
@@ -65,7 +67,7 @@ func (s *Service) prepareDocument(request generator.Request) (preparedDocument, 
 
 // hasLegacyGenerateFields обнаруживает смешение прежних одиночных полей и массива pous.
 // Возвращает наличие конфликтующих настроек, чтобы FBD-обработчик отклонил неоднозначный запрос до генерации.
-func hasLegacyGenerateFields(request generator.Request) bool {
+func hasLegacyGenerateFields(request fbdrequest.Request) bool {
 	return strings.TrimSpace(request.TemplateKey) != "" ||
 		strings.TrimSpace(request.ObjectName) != "" ||
 		strings.TrimSpace(request.POUName) != "" ||

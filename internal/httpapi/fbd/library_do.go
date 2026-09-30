@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"scheme-xml-generator/internal/generator"
-
+	"scheme-xml-generator/internal/generator/allocation"
+	xmlartifact "scheme-xml-generator/internal/generator/artifact"
+	"scheme-xml-generator/internal/generator/fbd"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/httpapi/transport"
 	"strings"
 )
@@ -14,7 +16,7 @@ import (
 // HandleLibraryDO генерирует библиотечный DO-граф по выбранным физическим модулям.
 // Проверяет шаблон и план до allocator, резервирует ID и передаёт сохранённый XML через output.Store.
 func (s *Service) HandleLibraryDO(w http.ResponseWriter, r *http.Request) {
-	var request generator.LibraryDORequest
+	var request fbd.LibraryDORequest
 	if err := transport.DecodeJSON(w, r, &request); err != nil {
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
@@ -30,14 +32,14 @@ func (s *Service) HandleLibraryDO(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	requirements := plan.Requirements()
-	var result generator.Result
-	_, err = s.Allocator.WithReservation(requirements.T11Count, requirements.CardCount, requirements.POUCount, generator.ReservationOptions{}, func(ids generator.IDRange) error {
+	var result xmlartifact.Result
+	_, err = s.Allocator.WithReservation(requirements.T11Count, requirements.CardCount, requirements.POUCount, allocation.ReservationOptions{}, func(ids xmlidentity.IDRange) error {
 		var generateErr error
 		result, generateErr = s.Generator.GenerateLibraryDO(plan, ids)
 		return generateErr
 	})
 	if err != nil {
-		var persistenceErr *generator.AllocatorPersistenceError
+		var persistenceErr *allocation.AllocatorPersistenceError
 		status := http.StatusBadRequest
 		if errors.As(err, &persistenceErr) {
 			status = http.StatusInternalServerError

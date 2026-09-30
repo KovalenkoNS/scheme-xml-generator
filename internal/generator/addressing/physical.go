@@ -3,8 +3,8 @@ package addressing
 
 import (
 	"fmt"
-	"scheme-xml-generator/internal/generator/contracts"
-	cpuprofile "scheme-xml-generator/internal/generator/controller"
+	cpuprofile "scheme-xml-generator/internal/domain/controller"
+	programcontext "scheme-xml-generator/internal/generator/program"
 	"strings"
 )
 
@@ -16,7 +16,7 @@ const PhysicalProfileMeasurement = "measurement-quality"
 // addresses. Keep the physical profile separate from the controller identity.
 // The software-only FBD graph does not consume this profile, but unknown names
 // are still rejected so a typo cannot silently change a later ST generation.
-func EffectiveModuleProfile(ctx contracts.ProgramContext, mode string) (string, error) {
+func EffectiveModuleProfile(ctx programcontext.ProgramContext, mode string) (string, error) {
 	profile := strings.TrimSpace(ctx.PhysicalProfile)
 	if profile == "" {
 		profile = PhysicalProfileLegacy

@@ -4,7 +4,7 @@ package hmi
 import (
 	"fmt"
 	"scheme-xml-generator/internal/generator/addressing"
-	"scheme-xml-generator/internal/generator/contracts"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/xmlcodec"
 	"strings"
 	"unicode/utf8"
@@ -38,7 +38,7 @@ func normalizeHMIContext(ctx HMIContext) (HMIContext, error) {
 		*field.value = value
 	}
 	if ctx.ResourceNumber == "0" {
-		return ctx, fmt.Errorf("диагностика: номер ресурса в пути привязки должен быть от 1 до %d", contracts.MaxTransportID)
+		return ctx, fmt.Errorf("диагностика: номер ресурса в пути привязки должен быть от 1 до %d", xmlidentity.MaxTransportID)
 	}
 	if !utf8.ValidString(ctx.Project) || len(ctx.Project) > 2048 || strings.ContainsAny(ctx.Project, "\r\n\t") {
 		return ctx, fmt.Errorf("диагностика: некорректное значение Project")

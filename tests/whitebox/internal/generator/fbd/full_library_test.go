@@ -6,7 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"scheme-xml-generator/internal/config"
-	"scheme-xml-generator/internal/generator/contracts"
+	fbdrequest "scheme-xml-generator/internal/generator/fbd/request"
+	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/library"
 	"strings"
 	"testing"
@@ -46,11 +47,11 @@ func TestEverySupportedSinopecTemplateGeneratesWhenPresent(t *testing.T) {
 			failures = append(failures, fmt.Sprintf("%s/%s: reference missing", item.OwnerName, item.Name))
 			continue
 		}
-		result, generateErr := (Generator{Config: config.Default()}).Generate(ref, contracts.Request{
+		result, generateErr := (Generator{Config: config.Default()}).Generate(ref, fbdrequest.Request{
 			ObjectName: fmt.Sprintf("_SMOKE_%04d", index+1),
 			POUName:    fmt.Sprintf("SMOKE_POU_%04d", index+1),
 			NameMode:   "base",
-		}, contracts.IDRange{T11Start: nextT11, CardStart: nextCard, POUID: nextPOU})
+		}, xmlidentity.IDRange{T11Start: nextT11, CardStart: nextCard, POUID: nextPOU})
 		if generateErr != nil {
 			failures = append(failures, fmt.Sprintf("%s/%s (ID=%s): %v", item.OwnerName, item.Name, item.ID, generateErr))
 			continue
