@@ -1,6 +1,6 @@
 # Живое подключение к Host
 
-Status: implemented
+Status: verified
 Created: 2026-09-30
 
 Источник — критическое замечание владельца и явное уточнение: «генератор не видит соединения и не обновляет его». Обновлению подлежит соединение, не таблицы и не версии приложений. Связанный пакет Host-client: [011](https://github.com/KovalenkoNS/Host-client/tree/main/specs/011-live-workspace).
