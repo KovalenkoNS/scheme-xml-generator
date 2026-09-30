@@ -13,7 +13,7 @@ import (
 func rawDOSheet(overrides ...map[string]string) iomap.Sheet {
 	rows := make([]map[string]string, len(overrides))
 	for index, values := range overrides {
-		rows[index] = map[string]string{"A": "3101-XZY-60507", "C": "DOR-P", "D": "A3-03", "E": "A4-03", "F": "5", "G": "3101-LOOP-NOT-TAG", "H": "A3-04", "I": "A4-04"}
+		rows[index] = map[string]string{"A": "3101-XZY-60507", "C": "DOR-P", "D": "A3-03", "E": "A4-03", "F": "5", "G": "3101-LOOP-NOT-TAG", "H": "A3-04", "I": "A4-04", "L": "A3", "M": "A4"}
 		for key, value := range values {
 			rows[index][key] = value
 		}
@@ -30,7 +30,7 @@ func TestRawMixedWorkbookIncludesDOAndDI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := Parse(data)
+	plan, err := parseAssignmentPlan(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestRawMixedWorkbookIncludesDOAndDI(t *testing.T) {
 			}
 		}
 	}
-	if len(plan.Groups) != 20 || modules != 122 || signals != 3184 {
+	if len(plan.Groups) != 32 || modules != 166 || signals != 3724 {
 		t.Fatalf("mixed totals: groups=%d modules=%d channels=%d", len(plan.Groups), modules, signals)
 	}
 	if doGroups != 12 || doModules != 72 || doSignals != 1948 || len(controllers) != 3 || len(sourceRows) != 487 {
@@ -79,7 +79,7 @@ func TestRawMixedWorkbookIncludesDOAndDI(t *testing.T) {
 // Проверяет четыре физических размещения DO в исходном формате: Tag No становится именем, разреженные номера каналов
 // сохраняются.
 func TestRawDOFourPlacementsUseTagNoAndKeepSparseChannels(t *testing.T) {
-	plan, err := ParseSheets([]iomap.Sheet{rawDOSheet(
+	plan, err := parseAssignmentSheets([]iomap.Sheet{rawDOSheet(
 		nil,
 		map[string]string{"A": "_ALREADY_NAMED", "F": "31", "C": "DOR-VFC", "J": "OTHER CABINET"},
 		map[string]string{"A": "3101-OTHER-2", "F": "0", "C": "DOR (SCS3)", "B": "plc_850", "D": "a3_03", "E": "a4_03"},
@@ -115,7 +115,7 @@ func TestRawDOFourPlacementsUseTagNoAndKeepSparseChannels(t *testing.T) {
 func TestRawDOOptionalPlacementsAndLoopAreNotRequired(t *testing.T) {
 	for _, optional := range []string{"", "-"} {
 		sheet := rawDOSheet(map[string]string{"E": optional, "H": optional, "I": optional, "G": ""})
-		plan, err := ParseSheets([]iomap.Sheet{sheet})
+		plan, err := parseAssignmentSheets([]iomap.Sheet{sheet})
 		if err != nil || len(plan.Groups) != 1 || len(plan.Groups[0].Modules) != 1 || len(plan.Groups[0].Modules[0].Channels) != 1 {
 			t.Fatalf("one explicit placement: %+v %v", plan, err)
 		}
@@ -123,7 +123,7 @@ func TestRawDOOptionalPlacementsAndLoopAreNotRequired(t *testing.T) {
 		for _, column := range []string{"E", "H", "I", "G"} {
 			delete(sheet.Rows[0].Cells, column)
 		}
-		plan, err = ParseSheets([]iomap.Sheet{sheet})
+		plan, err = parseAssignmentSheets([]iomap.Sheet{sheet})
 		if err != nil || len(plan.Groups) != 1 || len(plan.Groups[0].Modules) != 1 {
 			t.Fatalf("minimal DO columns: %+v %v", plan, err)
 		}
@@ -133,7 +133,7 @@ func TestRawDOOptionalPlacementsAndLoopAreNotRequired(t *testing.T) {
 // Проверяет обработку повторов исходных DO-строк и изоляцию ПЛК с одинаковыми адресами модулей.
 func TestRawDODuplicatesAndIndependentPLCs(t *testing.T) {
 	// Identical physical assignments collapse even if descriptive Loop differs.
-	plan, err := ParseSheets([]iomap.Sheet{rawDOSheet(nil, map[string]string{"A": "3101-xzy-60507", "B": "plc_850", "G": "OTHER LOOP"})})
+	plan, err := parseAssignmentSheets([]iomap.Sheet{rawDOSheet(nil, map[string]string{"A": "3101-xzy-60507", "B": "plc_850", "G": "OTHER LOOP"})})
 	if err != nil || len(plan.Groups) != 2 || len(plan.Warnings) != 4 {
 		t.Fatalf("exact DO duplicate: %+v %v", plan, err)
 	}
@@ -145,7 +145,7 @@ func TestRawDODuplicatesAndIndependentPLCs(t *testing.T) {
 		}
 	}
 	// One source can drive other physical channels and another PLC independently.
-	plan, err = ParseSheets([]iomap.Sheet{rawDOSheet(nil, map[string]string{"F": "6"}, map[string]string{"B": "OTHER_PLC"})})
+	plan, err = parseAssignmentSheets([]iomap.Sheet{rawDOSheet(nil, map[string]string{"F": "6"}, map[string]string{"B": "OTHER_PLC"})})
 	if err != nil || len(plan.Groups) != 4 || len(plan.Warnings) != 0 {
 		t.Fatalf("independent sources/PLCs: %+v %v", plan, err)
 	}
@@ -158,7 +158,7 @@ func TestRawDODuplicatesAndIndependentPLCs(t *testing.T) {
 	if channels != 12 {
 		t.Fatalf("repeated source lost physical outputs: %d", channels)
 	}
-	if _, err := ParseSheets([]iomap.Sheet{rawDOSheet(nil, map[string]string{"A": "OTHER-TAG", "B": "plc_850"})}); err == nil {
+	if _, err := parseAssignmentSheets([]iomap.Sheet{rawDOSheet(nil, map[string]string{"A": "OTHER-TAG", "B": "plc_850"})}); err == nil {
 		t.Fatal("different DO sources occupied one physical channel")
 	}
 }
@@ -175,13 +175,13 @@ func TestRawDORejectsInvalidDataAndUnknownReserveNames(t *testing.T) {
 		{"bad controller ID", "K", "x"}, {"negative controller ID", "K", "-1"}, {"metadata control", "J", "CAB\x00"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := ParseSheets([]iomap.Sheet{rawDOSheet(map[string]string{test.column: test.value})}); err == nil {
+			if _, err := parseAssignmentSheets([]iomap.Sheet{rawDOSheet(map[string]string{test.column: test.value})}); err == nil {
 				t.Fatal("invalid DO input accepted")
 			}
 		})
 	}
-	_, err := ParseSheets([]iomap.Sheet{rawDOSheet(map[string]string{"A": "SPARE"})})
-	if err == nil || !strings.Contains(err.Error(), "DO: Tag No") || !strings.Contains(err.Error(), "автоматическое имя не создаётся") {
+	_, err := parseAssignmentSheets([]iomap.Sheet{rawDOSheet(map[string]string{"A": "SPARE"})})
+	if err == nil || !strings.Contains(err.Error(), "DO:") || !strings.Contains(err.Error(), "резерв") || !strings.Contains(err.Error(), "имени") {
 		t.Fatalf("unclear reserve error: %v", err)
 	}
 }
@@ -194,7 +194,7 @@ func TestRawDOPreparedMapsAndPhysicalKindCollisions(t *testing.T) {
 	ai := tinySheet("AI", xin, xs)
 	preparedDO := numberedModuleSheet("DO", "6")
 	for _, sheets := range [][]iomap.Sheet{{rawDO, rawDI, ai, preparedDO}, {preparedDO, ai, rawDI, rawDO}} {
-		plan, err := ParseSheets(sheets)
+		plan, err := parseAssignmentSheets(sheets)
 		if err != nil || len(plan.Groups) != 6 {
 			t.Fatalf("prepared/raw merge: %+v %v", plan, err)
 		}
@@ -202,13 +202,13 @@ func TestRawDOPreparedMapsAndPhysicalKindCollisions(t *testing.T) {
 	// DI and DO must never describe the same physical module, including case aliases.
 	rawDI.Rows[1].Cells["D"], rawDI.Rows[1].Cells["B"] = "a3_03", "plc_850"
 	for _, sheets := range [][]iomap.Sheet{{rawDO, rawDI}, {rawDI, rawDO}} {
-		if _, err := ParseSheets(sheets); err == nil {
+		if _, err := parseAssignmentSheets(sheets); err == nil {
 			t.Fatal("DI/DO physical type collision accepted")
 		}
 	}
 	rawDO.Rows[1].Cells["D"], rawDO.Rows[1].Cells["B"] = "a1_00", "plc_850"
 	for _, sheets := range [][]iomap.Sheet{{rawDO, ai}, {ai, rawDO}} {
-		if _, err := ParseSheets(sheets); err == nil {
+		if _, err := parseAssignmentSheets(sheets); err == nil {
 			t.Fatal("prepared AI/raw DO physical type collision accepted")
 		}
 	}

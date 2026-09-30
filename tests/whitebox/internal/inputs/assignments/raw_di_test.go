@@ -36,7 +36,7 @@ func TestRawDIWorkbook(t *testing.T) {
 	if len(data) != 411336 || fmt.Sprintf("%X", sha256.Sum256(data)) != "C9C10D1E86936AC5B5BE17B76E2BDEFEDF71F97321938D1373CA179884879339" {
 		t.Fatal("DI fixture differs from the unchanged user workbook")
 	}
-	plan, err := Parse(data)
+	plan, err := parseAssignmentPlan(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,8 +99,11 @@ func TestRawDIWorkbook(t *testing.T) {
 		t.Fatalf("special cases: A70 B01=%v spare modules=%d named reserves=%v", a70B01, spareModules, namedReserves)
 	}
 	warnings := strings.Join(plan.Warnings, "\n")
-	if !strings.Contains(warnings, "1578") || !strings.Contains(warnings, "SPARE") || !strings.Contains(warnings, "других типов I/O") {
+	if !strings.Contains(warnings, "1578") || !strings.Contains(warnings, "SPARE") {
 		t.Fatalf("missing source warnings: %v", plan.Warnings)
+	}
+	if plan.Source == nil || len(plan.Source.Records) != 1376 || len(plan.Source.Excluded) != 401 {
+		t.Fatalf("physical IO inventory or excluded-row accounting lost: %+v", plan.Source)
 	}
 	// Check the source's secondary placements explicitly: support for a future
 	// populated Main_module2/Redundant_module2 must never happen by omission.
@@ -139,7 +142,7 @@ func TestRawDIWorkbook(t *testing.T) {
 
 // Проверяет DI-адаптер на размещениях, именах и пропусках каналов; исходные физические номера не уплотняются.
 func TestRawDIPlacementsNamesAndSparseChannels(t *testing.T) {
-	plan, err := ParseSheets([]iomap.Sheet{rawDISheet(
+	plan, err := parseAssignmentSheets([]iomap.Sheet{rawDISheet(
 		nil,
 		map[string]string{"A": "_ALREADY_NAMED", "F": "31", "C": "DIR-VFC", "J": "OTHER CABINET", "G": "Резерв"},
 		map[string]string{"A": "3010-OTHER-2", "F": "0", "C": "DIR (SCS1)", "J": "THIRD CABINET", "B": "plc_850", "D": "a11_05", "E": "a12_05"},
@@ -173,7 +176,7 @@ func TestRawDIPlacementsNamesAndSparseChannels(t *testing.T) {
 // инвентарь.
 func TestRawDISpareOnlyModuleAndOptionalRedundant(t *testing.T) {
 	for _, redundant := range []string{"", "-"} {
-		plan, err := ParseSheets([]iomap.Sheet{rawDISheet(map[string]string{"A": "SPARE", "E": redundant})})
+		plan, err := parseAssignmentSheets([]iomap.Sheet{rawDISheet(map[string]string{"A": "SPARE", "E": redundant})})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -181,7 +184,7 @@ func TestRawDISpareOnlyModuleAndOptionalRedundant(t *testing.T) {
 			t.Fatalf("SPARE-only physical module disappeared: %+v", plan)
 		}
 	}
-	plan, err := ParseSheets([]iomap.Sheet{rawDISheet(map[string]string{"E": "-"})})
+	plan, err := parseAssignmentSheets([]iomap.Sheet{rawDISheet(map[string]string{"E": "-"})})
 	if err != nil || len(plan.Groups) != 1 || len(plan.Groups[0].Modules[0].Channels) != 1 || plan.Groups[0].Modules[0].Channels[0].Member != "C1" {
 		t.Fatalf("single placement: %+v %v", plan, err)
 	}
@@ -199,7 +202,7 @@ func TestRawDIRejectsInvalidData(t *testing.T) {
 		{"metadata control", "J", "CAB\x00"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := ParseSheets([]iomap.Sheet{rawDISheet(map[string]string{test.column: test.value})}); err == nil {
+			if _, err := parseAssignmentSheets([]iomap.Sheet{rawDISheet(map[string]string{test.column: test.value})}); err == nil {
 				t.Fatal("invalid raw DI row accepted")
 			}
 		})
@@ -223,12 +226,12 @@ func TestRawDIRejectsConflictingPositionsAndReceivers(t *testing.T) {
 		{"changed controller ID", []map[string]string{{"K": "5"}, {"A": "OTHER", "F": "3", "K": "6"}}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := ParseSheets([]iomap.Sheet{rawDISheet(test.rows...)}); err == nil {
+			if _, err := parseAssignmentSheets([]iomap.Sheet{rawDISheet(test.rows...)}); err == nil {
 				t.Fatal("conflicting assignments accepted")
 			}
 		})
 	}
-	plan, err := ParseSheets([]iomap.Sheet{rawDISheet(nil, map[string]string{"B": "OTHER_PLC"})})
+	plan, err := parseAssignmentSheets([]iomap.Sheet{rawDISheet(nil, map[string]string{"B": "OTHER_PLC"})})
 	if err != nil || len(plan.Groups) != 4 {
 		t.Fatalf("different PLC namespaces collided: %+v %v", plan, err)
 	}
@@ -250,7 +253,7 @@ func TestRawDIHeadersAndPreparedSheetMerge(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sheet := rawDISheet(nil)
 			test.edit(&sheet)
-			if _, err := ParseSheets([]iomap.Sheet{tinySheet("AI", xin, xs), sheet}); err == nil {
+			if _, err := parseAssignmentSheets([]iomap.Sheet{tinySheet("AI", xin, xs), sheet}); err == nil {
 				t.Fatal("ambiguous or corrupted raw header accepted next to a valid prepared map")
 			}
 		})
@@ -259,9 +262,14 @@ func TestRawDIHeadersAndPreparedSheetMerge(t *testing.T) {
 	do := tinySheet("DO", strings.Replace(dout, "A1-00", "A2-00", 1))
 	do.Rows[1].Cells["D"] = "A2-00"
 	raw := rawDISheet(nil, map[string]string{"C": "AIR-EP", "A": "ignored AI", "D": "", "E": "", "F": ""})
+	if _, err := parseAssignmentSheets([]iomap.Sheet{raw}); err == nil {
+		t.Fatal("incomplete physical AI was silently ignored")
+	}
+	// Only unaddressed nonphysical rows may be excluded; AI must now be read or rejected explicitly.
+	raw.Rows[2].Cells["C"] = "S"
 	for _, sheets := range [][]iomap.Sheet{{ai, raw, do}, {raw, do, ai}} {
-		plan, err := ParseSheets(sheets)
-		if err != nil || len(plan.Groups) != 4 || len(plan.Warnings) != 1 || !strings.Contains(plan.Warnings[0], "1 строк") {
+		plan, err := parseAssignmentSheets(sheets)
+		if err != nil || len(plan.Groups) != 4 || len(plan.Warnings) != 0 || plan.Source == nil || len(plan.Source.Excluded) != 1 || plan.Source.Excluded[0].IOType != "S" {
 			t.Fatalf("mixed sheets: %+v %v", plan, err)
 		}
 	}
@@ -269,7 +277,7 @@ func TestRawDIHeadersAndPreparedSheetMerge(t *testing.T) {
 	// controller capitalization differs and regardless of sheet order.
 	raw.Rows[1].Cells["D"], raw.Rows[1].Cells["B"] = "A1-00", "plc_850"
 	for _, sheets := range [][]iomap.Sheet{{ai, raw}, {raw, ai}} {
-		if _, err := ParseSheets(sheets); err == nil {
+		if _, err := parseAssignmentSheets(sheets); err == nil {
 			t.Fatal("AI/DI physical module collision accepted")
 		}
 	}

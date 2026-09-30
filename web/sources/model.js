@@ -6,6 +6,7 @@ export function controllers(sources) {
   for (const source of sources) {
     for (const group of source.ao?.groups || []) names.add(group.fcs);
     for (const group of source.assignments?.groups || []) names.add(group.controllerName);
+    for (const record of source.assignments?.source?.records || []) if (![...names].some(name => name.toLowerCase() === record.controllerName.toLowerCase())) names.add(record.controllerName);
     for (const controller of source.io?.controllers || []) names.add(nameOf(controller));
   }
   return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, "ru", { numeric: true }));
@@ -44,7 +45,11 @@ export function fbdGroups(sources, plc) {
 };
 
 // Возвращает направления IO выбранного ПЛК для редактора библиотечных шаблонов FBD.
-export function kinds(sources, plc) { return [...new Set(fbdGroups(sources, plc).map(group => group.kind))].sort(); };
+export function kinds(sources, plc) {
+  const result = new Set(fbdGroups(sources, plc).map(group => group.kind));
+  for (const source of sources) for (const record of source.assignments?.source?.records || []) if (record.controllerName === plc) result.add(record.kind);
+  return [...result].sort();
+};
 
 // Формирует ключ настройки физических модулей из источника, семейства парсера и группы.
 export function groupID(group) { return `${group.source.id}|${group.family}|${group.key}`; };

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/application/ioimport"
 	"scheme-xml-generator/internal/generator/addressing"
 	stassignment "scheme-xml-generator/internal/generator/st/assignment"
 	"scheme-xml-generator/internal/inputs/assignments"
@@ -22,7 +23,7 @@ func nativeDOAPIInput(t *testing.T) ([]byte, *assignments.Plan, stassignment.Mod
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := assignments.Parse(data)
+	source, err := ioimport.Read(data)
 	if err != nil {
 		t.Fatal(err)
 	}

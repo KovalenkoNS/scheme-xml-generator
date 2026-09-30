@@ -3,6 +3,7 @@ package moduleassignment
 
 import (
 	"fmt"
+	"scheme-xml-generator/internal/application/ioimport"
 	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/planning"
 	programcontext "scheme-xml-generator/internal/generator/program"
@@ -10,7 +11,6 @@ import (
 	ioctx "scheme-xml-generator/internal/httpapi/io/context"
 	"scheme-xml-generator/internal/httpapi/io/modulemapping"
 	"scheme-xml-generator/internal/httpapi/limits"
-	"scheme-xml-generator/internal/inputs/assignments"
 )
 
 type assignmentPlan struct {
@@ -26,7 +26,7 @@ type assignmentPlan struct {
 // Возвращает планы, контекст, суммарные требования и предупреждения; файлов и allocator не касается.
 func prepareAssignmentPlan(input assignmentInput) (assignmentPlan, error) {
 	data, request, rawContext := input.Data, input.Request, input.RawContext
-	source, err := assignments.Parse(data)
+	source, err := ioimport.Read(data)
 	if err == nil {
 		err = modulemapping.CheckModuleMappingSize(source)
 	}

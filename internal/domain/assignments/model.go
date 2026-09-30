@@ -1,9 +1,12 @@
 // Независимая от формата входа модель назначений ПЛК: группы, физические модули и каналы.
 package assignments
 
+import "scheme-xml-generator/internal/domain/io"
+
 type Plan struct {
-	Groups   []Group  `json:"groups"`
-	Warnings []string `json:"warnings"`
+	Groups   []Group    `json:"groups"`
+	Warnings []string   `json:"warnings"`
+	Source   *io.Source `json:"source,omitempty"`
 }
 
 type Group struct {
@@ -31,10 +34,11 @@ type Module struct {
 }
 
 type Channel struct {
-	Channel   int    `json:"channel"`
-	Tag       string `json:"tag"`
-	Member    string `json:"member,omitempty"`
-	Template  string `json:"template,omitempty"`
-	SourceRow int    `json:"sourceRow"`
-	Reserve   bool   `json:"reserve"`
+	Channel     int    `json:"channel"`
+	Tag         string `json:"tag"`
+	Member      string `json:"member,omitempty"`
+	Template    string `json:"template,omitempty"`
+	SourceRow   int    `json:"sourceRow"`
+	Reserve     bool   `json:"reserve"`
+	Description string `json:"description,omitempty"`
 }

@@ -4,8 +4,8 @@ package modulemapping
 import (
 	"net/http"
 
+	"scheme-xml-generator/internal/application/ioimport"
 	"scheme-xml-generator/internal/httpapi/transport"
-	"scheme-xml-generator/internal/inputs/assignments"
 )
 
 // HandleModuleMappingPreview возвращает структуру локальных назначений ПЛК до генерации.
@@ -16,7 +16,7 @@ func (s *Service) HandleModuleMappingPreview(w http.ResponseWriter, r *http.Requ
 		transport.WriteError(w, http.StatusBadRequest, err)
 		return
 	}
-	plan, err := assignments.Parse(data)
+	plan, err := ioimport.Read(data)
 	if err == nil {
 		err = CheckModuleMappingSize(plan)
 	}

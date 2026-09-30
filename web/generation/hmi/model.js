@@ -4,7 +4,8 @@ import * as _equipment_controllers from "../../equipment/controllers.js";
 import * as _shared_validation from "../../shared/validation.js";
 // Планирует кадры HMI только выбранного ПЛК через диагностический API; явно отклоняет неподтверждённый профиль 850.
 export function hmiJobs(sources, plc, options) {
-  if (options.cpu !== _equipment_controllers.CPU715) throw new Error("Для HMI 850 нужен подтверждённый профиль; текущая диагностика предназначена для 715.");
+  if (options.cpu !== _equipment_controllers.CPU715) throw new Error("Профиль HMI 850 по предоставленному 850_DIAG.xml ещё не реализован; текущая диагностика предназначена для 715.");
+  if (sources.some(source => source.assignments?.source?.records.some(record => record.controllerName === plc))) throw new Error("Исходный SCS IO-лист прочитан. Для HMI ещё не определён полный аппаратный инвентарь этого ПЛК: типы крейтов, CPU/MI и размещение панелей. Привязка SCS-источника к диагностическим кадрам не реализована.");
   const matches = [];
   for (const source of sources) {
     const selected = (source.io?.controllers || []).filter(controller => _sources_model.nameOf(controller) === plc);

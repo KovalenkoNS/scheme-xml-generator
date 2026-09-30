@@ -11,10 +11,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/application/ioimport"
 	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/generator/addressing"
 	stassignment "scheme-xml-generator/internal/generator/st/assignment"
-	"scheme-xml-generator/internal/inputs/assignments"
 	"strings"
 	"testing"
 )
@@ -73,7 +73,7 @@ func skzAPIWorkbook(t *testing.T) []byte {
 // compatibility API.
 func skzAPIConfig(t *testing.T, source []byte, kind string) string {
 	t.Helper()
-	plan, err := assignments.Parse(source)
+	plan, err := ioimport.Read(source)
 	if err != nil {
 		t.Fatal(err)
 	}

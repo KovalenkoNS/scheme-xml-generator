@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/application/ioimport"
 	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	programcontext "scheme-xml-generator/internal/generator/program"
 	stassignment "scheme-xml-generator/internal/generator/st/assignment"
@@ -33,18 +34,18 @@ func skzDIRequest(t *testing.T, workbook []byte, mode, only string) stassignment
 	return skzRawRequest(t, workbook, mode, "DI", only)
 }
 
-// skzRawRequest parses an assignment workbook and builds selected kind/POU choices, numbering ST module IDs
-// independently in each PLC.
+// skzRawRequest builds historical DI/DO choices through the application import pipeline; an empty kind selects both digital directions.
+// ST module IDs remain explicit and independent in each PLC.
 func skzRawRequest(t *testing.T, workbook []byte, mode, kind, only string) stassignment.ModuleMappingRequest {
 	t.Helper()
-	plan, err := assignments.Parse(workbook)
+	plan, err := ioimport.Read(workbook)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request := stassignment.ModuleMappingRequest{Kind: mode}
 	nextID := map[string]int64{}
 	for _, group := range plan.Groups {
-		if kind != "" && group.Kind != kind {
+		if kind == "" && group.Kind != "DI" && group.Kind != "DO" || kind != "" && group.Kind != kind {
 			continue
 		}
 		if only != "" && group.POUName != only {
@@ -88,8 +89,8 @@ func TestSKZDIRawWorkbookAPI(t *testing.T) {
 				t.Fatalf("preview %d: %s", preview.Code, preview.Body.String())
 			}
 			var plan assignments.Plan
-			if err := json.Unmarshal(preview.Body.Bytes(), &plan); err != nil || len(plan.Groups) != 20 {
-				t.Fatalf("unexpected mixed DI/DO preview: %v, %d groups", err, len(plan.Groups))
+			if err := json.Unmarshal(preview.Body.Bytes(), &plan); err != nil || len(plan.Groups) != 32 || plan.Source == nil || len(plan.Source.Records) != 1376 || len(plan.Source.Excluded) != 401 {
+				t.Fatalf("unexpected mixed DI/DO/AI preview: %v, %d groups", err, len(plan.Groups))
 			}
 			assertNoAOOutputOrState(t, statePath, outputDir)
 			response := httptest.NewRecorder()

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"scheme-xml-generator/internal/application/ioimport"
 	"scheme-xml-generator/internal/generator/addressing"
 	xmlidentity "scheme-xml-generator/internal/generator/identity"
 	"scheme-xml-generator/internal/generator/planning"
@@ -27,10 +28,18 @@ func TestModuleRawWorkbookFullDOPhysicalAssignmentsAndLogicalCounts(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	source, err := assignments.Parse(data)
+	source, err := ioimport.Read(data)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Keep this historical physical DI/DO reference scoped to its two directions; the source now also exposes AI.
+	digitalGroups := make([]assignments.Group, 0, len(source.Groups))
+	for _, group := range source.Groups {
+		if group.Kind == "DI" || group.Kind == "DO" {
+			digitalGroups = append(digitalGroups, group)
+		}
+	}
+	source.Groups = digitalGroups
 	for _, kind := range []string{"st"} {
 		t.Run(kind, func(t *testing.T) {
 			plans, err := planning.PrepareModulePlans(source, assignmentTestRequest(source, kind))
@@ -92,7 +101,7 @@ func TestModuleActualWorkbookCountsAndDOReferenceAssignments(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			source, err := assignments.Parse(data)
+			source, err := ioimport.Read(data)
 			if err != nil {
 				t.Fatal(err)
 			}

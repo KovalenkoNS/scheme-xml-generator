@@ -34,6 +34,7 @@ func ParseSheets(sheets []xlsx.Sheet) (*Plan, error) {
 	controllerNames := map[string]string{}
 	rows, tables := 0, 0
 	for _, sheet := range sheets {
+		rawState.Sheet = sheet.Name
 		var columns map[string]string
 		kind, headerRow := "", 0
 		for _, row := range sheet.Rows {
@@ -66,7 +67,7 @@ func ParseSheets(sheets []xlsx.Sheet) (*Plan, error) {
 			}
 			var err error
 			if kind == rawIOKind {
-				err = rawState.ParseRow(row, columns, modules, plan)
+				_, err = rawState.ParseRow(row, columns, plan)
 			} else {
 				err = prepared.ParseRow(row, columns, kind, modules, aiOwners, plan)
 			}
@@ -79,11 +80,8 @@ func ParseSheets(sheets []xlsx.Sheet) (*Plan, error) {
 			}
 		}
 	}
-	if tables == 0 || len(modules) == 0 {
-		return nil, fmt.Errorf("Назначения: не найдена таблица назначений с SCS AI, SCS DO или исходными DI/DO (Tag No, SCS, I/O Type, Main_module, Channel)")
-	}
-	if rawState.Ignored > 0 {
-		plan.Warnings = append(plan.Warnings, fmt.Sprintf("Исходная карта IO: пропущено %d строк других типов I/O; в этом формате обрабатываются DI и DO.", rawState.Ignored))
+	if tables == 0 || len(modules) == 0 && (plan.Source == nil || len(plan.Source.Records) == 0) {
+		return nil, fmt.Errorf("Назначения: не найдена таблица назначений с SCS AI, SCS DO или исходными DI/DO/AI (Tag No, SCS, I/O Type, Main_module, Channel)")
 	}
 	if len(modules) > 4096 {
 		return nil, fmt.Errorf("Назначения: допустимо не более 4096 модулей")

@@ -74,6 +74,16 @@
   color:var(--muted);
   margin:17px 0 0
 }
+.source-records { margin-top:8px; font-size:12px }
+.source-records summary { cursor:pointer; padding:4px 0 }
+.source-record-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:10px 0 }
+.source-record-controls input { flex:1; min-width:180px }
+.source-record-controls button { min-width:32px }
+.source-record-viewport { overflow:auto; max-height:430px }
+.source-record-viewport table { width:100%; border-collapse:collapse; font-size:12px }
+.source-record-viewport th { position:sticky; top:0; background:var(--panel,#fff); text-align:left }
+.source-record-viewport th, .source-record-viewport td { padding:8px; border-bottom:1px solid var(--line); vertical-align:top; white-space:pre-line }
+.source-record-viewport td:first-child { min-width:120px; overflow-wrap:anywhere }
 @media(max-width:750px) {
   .source-panel {
     padding:18px

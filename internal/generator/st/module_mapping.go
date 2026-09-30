@@ -113,7 +113,7 @@ func GenerateModuleST(plan stassignment.ControllerPlan, ctx programcontext.Progr
 	warnings = append(warnings, "ST назначений сохраняет перечисленные в Excel каналы AI и назначает все каналы добавленных резервных AI-модулей. DO назначает все 32 физических выхода каждого модуля через D32V_v1._00…_31 независимо от заполнения карты FBD. DI назначает Stat и все 32 входа i00…i31 каждого D32V_v1, включая каналы без FBD-получателя. Объекты AD3_v2 и D32V_v1 должны существовать.",
 		fmt.Sprintf("Выбран %s, физический профиль %s. Сверьте адреса и числовые ID модулей с конфигурацией целевого проекта.", ctx.ControllerTypeName, ctx.PhysicalProfile))
 	if ctx.PhysicalProfile == addressing.PhysicalProfileLegacy {
-		warnings = append(warnings, "ST профиля legacy-iu-qu построен по физическим связям нативных FBD AI/DO: ValueDINT/Status для AI и Value для DO. Отдельный нативный ST-эталон не предоставлен; импорт, компиляция и выполнение требуют проверки в целевой SCADA.")
+		warnings = append(warnings, "ST профиля legacy-iu-qu использует ValueDINT/Status для AI, подтверждённые AI715_st.xml; DO использует Value по нативным FBD-связям. Отдельный нативный DO ST-эталон не предоставлен. Импорт, компиляция и выполнение требуют проверки в целевой SCADA.")
 	} else if hasAI || hasDI {
 		warnings = append(warnings, "Функция QUAL_STAT должна присутствовать в TenixRtLib.")
 	}

@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"scheme-xml-generator/internal/application/ioimport"
 	cpuprofile "scheme-xml-generator/internal/domain/controller"
 	"scheme-xml-generator/internal/generator/addressing"
 	stassignment "scheme-xml-generator/internal/generator/st/assignment"
@@ -22,7 +23,7 @@ import (
 // physical channels, controller isolation and downloads.
 func TestSKZRawDOAndMixedWorkbookAPI(t *testing.T) {
 	workbook := skzDIRawWorkbook(t)
-	source, err := assignments.Parse(workbook)
+	source, err := ioimport.Read(workbook)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +144,7 @@ func assertSKZRawST(t *testing.T, data []byte, source *assignments.Plan, request
 // both CPU address profiles, without inventing source rows.
 func TestRawDOSparseSourceGeneratesFullChannelST(t *testing.T) {
 	workbook := skzDIRawWorkbook(t)
-	source, err := assignments.Parse(workbook)
+	source, err := ioimport.Read(workbook)
 	if err != nil {
 		t.Fatal(err)
 	}
